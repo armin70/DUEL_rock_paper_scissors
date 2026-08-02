@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://82b82wuwvg1w"]
+
+[ext_resource type="Script" uid="uid://bfa6ofr3bgyvd" path="res://core/cards/card_definition.gd" id="1_2b53a"]
+[ext_resource type="Script" uid="uid://c7x3gmsi5cxow" path="res://core/cards/behaviors/disable_gesture_behavior.gd" id="1_dw1ed"]
+[ext_resource type="Texture2D" uid="uid://bc0uta1ku1ngj" path="res://art/cards/29.jpg" id="2_d0e31"]
+
+[sub_resource type="Resource" id="Resource_x7kle"]
+script = ExtResource("1_dw1ed")
+disabled_gesture = 2
+metadata/_custom_type_script = "uid://c7x3gmsi5cxow"
+
+[resource]
+script = ExtResource("1_2b53a")
+card_id = &"disabler_scissors"
+display_name = "disabler scissors"
+gesture = 2
+mana_cost = 4
+front_texture = ExtResource("2_d0e31")
+behavior = SubResource("Resource_x7kle")
+metadata/_custom_type_script = "uid://bfa6ofr3bgyvd"

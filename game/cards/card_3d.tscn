@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://dklk3d2njec5"]
+
+[ext_resource type="Script" uid="uid://d2dybtb4qsy1r" path="res://core/cards/card_3d.gd" id="1_hee7s"]
+[ext_resource type="Texture2D" uid="uid://bnq7dxmuosbax" path="res://icon.svg" id="2_bml1i"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_fuxww"]
+size = Vector3(1.55, 0.12, 2.15)
+
+[sub_resource type="QuadMesh" id="QuadMesh_hee7s"]
+size = Vector2(1.5, 2.1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hee7s"]
+size = Vector3(1.55, 0.12, 2.15)
+
+[sub_resource type="QuadMesh" id="QuadMesh_bml1i"]
+size = Vector2(1.5, 2.1)
+
+[node name="card_3d" type="Area3D" unique_id=162614256]
+collision_mask = 0
+script = ExtResource("1_hee7s")
+back_texture = ExtResource("2_bml1i")
+
+[node name="CardBody" type="MeshInstance3D" parent="." unique_id=2030787405]
+mesh = SubResource("BoxMesh_fuxww")
+
+[node name="CardArt" type="MeshInstance3D" parent="." unique_id=1330747358]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0.065, 0)
+mesh = SubResource("QuadMesh_hee7s")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=709102180]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, 0)
+shape = SubResource("BoxShape3D_hee7s")
+
+[node name="CardName" type="Label3D" parent="." unique_id=2065700296]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0.08, 0)
+visible = false
+
+[node name="DisabledOverlay" type="MeshInstance3D" parent="." unique_id=931473029]
+transform = Transform3D(1, 0, 0, 0, 1.1924881e-08, 1, 0, -1, 1.1924881e-08, 0, 0.2, 0)
+visible = false
+mesh = SubResource("QuadMesh_bml1i")
+
+[node name="DisabledLabel" type="Label3D" parent="." unique_id=2041056964]
+transform = Transform3D(1, 0, 0, 0, 1.1924881e-08, 1, 0, -1, 1.1924881e-08, 0, 0.1, 0)
+visible = false
+text = "DISABLED"

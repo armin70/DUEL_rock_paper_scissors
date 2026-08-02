@@ -1,0 +1,219 @@
+[gd_scene format=3 uid="uid://06iqmu2u82b3"]
+
+[ext_resource type="Script" uid="uid://61mdtpx0mhpy" path="res://game/table/game_layout.gd" id="1_v3atx"]
+[ext_resource type="PackedScene" uid="uid://y41sb3v7es7c" path="res://game/table/card_place_3d.tscn" id="2_7of5j"]
+[ext_resource type="PackedScene" uid="uid://mlrgx5ny6jdc" path="res://art/board/JustLand.glb" id="2_ult0l"]
+[ext_resource type="Script" uid="uid://dp6ghb3kp71ga" path="res://game/match_controller_3d.gd" id="3_g4axw"]
+[ext_resource type="Resource" uid="uid://57vjxew312gp" path="res://data/rules/default_match_rules.tres" id="4_v3atx"]
+[ext_resource type="Resource" uid="uid://ry2pgu63y4qe" path="res://data/decks/starter_deck.tres" id="5_xheak"]
+[ext_resource type="Resource" uid="uid://btrccapipoth7" path="res://data/decks/dealer_deck.tres" id="6_pdiy6"]
+[ext_resource type="PackedScene" uid="uid://dklk3d2njec5" path="res://game/cards/card_3d.tscn" id="7_ult0l"]
+[ext_resource type="Script" uid="uid://cvvu1lfwi7b3q" path="res://game/ui/game_hud.gd" id="8_xheak"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_6o72v"]
+size = Vector3(18, 0.4, 19)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_v3atx"]
+albedo_color = Color(0, 0.42745098, 0.60784316, 1)
+
+[sub_resource type="Environment" id="Environment_g4axw"]
+background_mode = 1
+background_color = Color(1.0378193e-07, 0.009764861, 0.07549808, 1)
+ambient_light_color = Color(0.3733015, 0.89404994, 0.9999998, 1)
+ambient_light_energy = 0.6
+
+[node name="MainGame" type="Node3D" unique_id=2055770389]
+
+[node name="Table" type="MeshInstance3D" parent="." unique_id=979065970]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
+visible = false
+mesh = SubResource("BoxMesh_6o72v")
+surface_material_override/0 = SubResource("StandardMaterial3D_v3atx")
+
+[node name="BoardVisual" type="Node3D" parent="." unique_id=1145592782]
+
+[node name="JustLand" parent="BoardVisual" unique_id=777053995 instance=ExtResource("2_ult0l")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, 0, -0.15, 0)
+
+[node name="GameLayout" type="Node3D" parent="." unique_id=1507115213]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+script = ExtResource("1_v3atx")
+
+[node name="OpponentHand" type="Node3D" parent="GameLayout" unique_id=1812289617]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, -8.1)
+
+[node name="OpponentBoard" type="Node3D" parent="GameLayout" unique_id=818209531]
+
+[node name="BackRow" type="Node3D" parent="GameLayout/OpponentBoard" unique_id=761737918]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5.5)
+
+[node name="BackLeft" parent="GameLayout/OpponentBoard/BackRow" unique_id=1644330271 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0.1, 0)
+owner_id = 1
+logical_id = 4
+
+[node name="BackMiddle0" parent="GameLayout/OpponentBoard/BackRow" unique_id=1923244690 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 0.1, 0)
+owner_id = 1
+logical_id = 5
+
+[node name="BackMiddle1" parent="GameLayout/OpponentBoard/BackRow" unique_id=2057797898 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.1, 0)
+owner_id = 1
+logical_id = 6
+
+[node name="BackRight" parent="GameLayout/OpponentBoard/BackRow" unique_id=1040064076 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.1, 0)
+owner_id = 1
+logical_id = 7
+
+[node name="FrontRow" type="Node3D" parent="GameLayout/OpponentBoard" unique_id=1801741486]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2.8)
+
+[node name="FrontLeft" parent="GameLayout/OpponentBoard/FrontRow" unique_id=1220839597 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0.1, 0)
+owner_id = 1
+logical_id = 0
+
+[node name="FrontMiddle0" parent="GameLayout/OpponentBoard/FrontRow" unique_id=349636629 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 0.1, 0)
+logical_id = 1
+
+[node name="FrontMiddle1" parent="GameLayout/OpponentBoard/FrontRow" unique_id=614363606 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.1, 0)
+logical_id = 2
+
+[node name="FrontRight" parent="GameLayout/OpponentBoard/FrontRow" unique_id=1892371311 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.1, 0)
+logical_id = 3
+
+[node name="DealerRow" type="Node3D" parent="GameLayout" unique_id=242341621]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.2)
+
+[node name="DealerLeft" parent="GameLayout/DealerRow" unique_id=2110180199 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0.1, 0)
+kind = 1
+logical_id = 0
+
+[node name="DealerMiddle0" parent="GameLayout/DealerRow" unique_id=1401993184 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 0.1, 0)
+kind = 1
+logical_id = 1
+
+[node name="DealerMiddle1" parent="GameLayout/DealerRow" unique_id=1446231935 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.1, 0)
+kind = 1
+logical_id = 2
+
+[node name="DealerRight" parent="GameLayout/DealerRow" unique_id=855153319 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.1, 0)
+kind = 1
+logical_id = 3
+
+[node name="PlayerBoard" type="Node3D" parent="GameLayout" unique_id=1216177435]
+
+[node name="BackRow" type="Node3D" parent="GameLayout/PlayerBoard" unique_id=1960441128]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 4.8)
+
+[node name="BackLeft" parent="GameLayout/PlayerBoard/BackRow" unique_id=578777968 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0.1, 0)
+owner_id = 1
+logical_id = 4
+
+[node name="BackMiddle0" parent="GameLayout/PlayerBoard/BackRow" unique_id=2083266437 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 0.1, 0)
+owner_id = 1
+logical_id = 5
+
+[node name="BackMiddle1" parent="GameLayout/PlayerBoard/BackRow" unique_id=619181011 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.1, 0)
+owner_id = 1
+logical_id = 6
+
+[node name="BackRight" parent="GameLayout/PlayerBoard/BackRow" unique_id=32464806 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.1, 0)
+owner_id = 1
+logical_id = 7
+
+[node name="FrontRow" type="Node3D" parent="GameLayout/PlayerBoard" unique_id=1401076226]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2.3)
+
+[node name="FrontLeft" parent="GameLayout/PlayerBoard/FrontRow" unique_id=262275839 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0.1, 0)
+owner_id = 1
+logical_id = 0
+
+[node name="FrontMiddle0" parent="GameLayout/PlayerBoard/FrontRow" unique_id=597957214 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 0.1, 0)
+logical_id = 1
+
+[node name="FrontMiddle1" parent="GameLayout/PlayerBoard/FrontRow" unique_id=1389574647 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.1, 0)
+logical_id = 2
+
+[node name="FrontRight" parent="GameLayout/PlayerBoard/FrontRow" unique_id=657321977 instance=ExtResource("2_7of5j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.1, 0)
+logical_id = 3
+
+[node name="PlayerHand" type="Node3D" parent="GameLayout" unique_id=1200663976]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 7)
+
+[node name="RuntimeCards" type="Node3D" parent="." unique_id=179306654]
+
+[node name="MatchController3D" type="Node3D" parent="." unique_id=1855810425 node_paths=PackedStringArray("game_layout", "runtime_cards", "camera_3d", "hud")]
+script = ExtResource("3_g4axw")
+rules = ExtResource("4_v3atx")
+player_one_deck = ExtResource("5_xheak")
+player_two_deck = ExtResource("5_xheak")
+dealer_deck = ExtResource("6_pdiy6")
+game_layout = NodePath("../GameLayout")
+card_scene = ExtResource("7_ult0l")
+runtime_cards = NodePath("../RuntimeCards")
+camera_3d = NodePath("../Camera3D")
+hud = NodePath("../HUD")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1555863791]
+transform = Transform3D(0.8660254, 0.40957603, -0.28678823, 0, 0.57357645, 0.81915206, 0.5, -0.7094065, 0.49673176, 0, 0, 0)
+light_energy = 1.5
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1403354002]
+environment = SubResource("Environment_g4axw")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1052474298]
+transform = Transform3D(1, 0, 0, 0, 0.43837115, 0.89879405, 0, -0.89879405, 0.43837115, -0.4717667, 8.680633, 5.63181)
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1916526783]
+script = ExtResource("8_xheak")
+
+[node name="Root" type="Control" parent="HUD" unique_id=593682323]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="PlayerInfo" type="VBoxContainer" parent="HUD/Root" unique_id=882077475]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TurnLabel" type="Label" parent="HUD/Root/PlayerInfo" unique_id=701096677]
+layout_mode = 2
+
+[node name="PlayerScoreLabel" type="Label" parent="HUD/Root/PlayerInfo" unique_id=1006718452]
+layout_mode = 2
+
+[node name="OpponentScoreLabel" type="Label" parent="HUD/Root/PlayerInfo" unique_id=433589157]
+layout_mode = 2
+
+[node name="PlayerManaLabel" type="Label" parent="HUD/Root/PlayerInfo" unique_id=2067357322]
+layout_mode = 2
+
+[node name="OpponentManaLabel" type="Label" parent="HUD/Root/PlayerInfo" unique_id=1154268974]
+layout_mode = 2
+
+[node name="EndTurnButton" type="Button" parent="HUD/Root" unique_id=1807009853]
+layout_mode = 0
+offset_top = 135.0
+offset_right = 40.0
+offset_bottom = 143.0
