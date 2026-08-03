@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://y41sb3v7es7c" path="res://game/table/card_place_3d.tscn" id="2_7of5j"]
 [ext_resource type="PackedScene" uid="uid://mlrgx5ny6jdc" path="res://art/board/JustLand.glb" id="2_ult0l"]
 [ext_resource type="Script" uid="uid://dp6ghb3kp71ga" path="res://game/match_controller_3d.gd" id="3_g4axw"]
+[ext_resource type="PackedScene" uid="uid://mey4xdpnjtbf" path="res://game/table/card_pile_3d.tscn" id="4_ult0l"]
 [ext_resource type="Resource" uid="uid://57vjxew312gp" path="res://data/rules/default_match_rules.tres" id="4_v3atx"]
 [ext_resource type="Resource" uid="uid://ry2pgu63y4qe" path="res://data/decks/starter_deck.tres" id="5_xheak"]
 [ext_resource type="Resource" uid="uid://btrccapipoth7" path="res://data/decks/dealer_deck.tres" id="6_pdiy6"]
@@ -158,6 +159,35 @@ logical_id = 3
 [node name="PlayerHand" type="Node3D" parent="GameLayout" unique_id=1200663976]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 7)
 
+[node name="PlayerPiles" type="Node3D" parent="GameLayout" unique_id=1399730841]
+
+[node name="DrawPile" parent="GameLayout/PlayerPiles" unique_id=1075737316 instance=ExtResource("4_ult0l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.8, 0.1, 6.8)
+
+[node name="DiscardPile" parent="GameLayout/PlayerPiles" unique_id=1044535613 instance=ExtResource("4_ult0l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.8, 0.1, 6.8)
+pile_type = 1
+
+[node name="ReservePile" parent="GameLayout/PlayerPiles" unique_id=509751854 instance=ExtResource("4_ult0l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.7, 0.1, 6.8)
+pile_type = 2
+
+[node name="OpponentPiles" type="Node3D" parent="GameLayout" unique_id=1308555787]
+
+[node name="DrawPile" parent="GameLayout/OpponentPiles" unique_id=521947117 instance=ExtResource("4_ult0l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.8, 0.1, -7.4)
+owner_id = 2
+
+[node name="DiscardPile" parent="GameLayout/OpponentPiles" unique_id=1241417588 instance=ExtResource("4_ult0l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.8, 0.1, -7.4)
+owner_id = 2
+pile_type = 1
+
+[node name="ReservePile" parent="GameLayout/OpponentPiles" unique_id=699035948 instance=ExtResource("4_ult0l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.7, 0.1, -7.4)
+owner_id = 2
+pile_type = 2
+
 [node name="RuntimeCards" type="Node3D" parent="." unique_id=179306654]
 
 [node name="MatchController3D" type="Node3D" parent="." unique_id=1855810425 node_paths=PackedStringArray("game_layout", "runtime_cards", "camera_3d", "hud")]
@@ -181,7 +211,10 @@ shadow_enabled = true
 environment = SubResource("Environment_g4axw")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=1052474298]
-transform = Transform3D(1, 0, 0, 0, 0.43837115, 0.89879405, 0, -0.89879405, 0.43837115, -0.4717667, 8.680633, 5.63181)
+transform = Transform3D(1, 0, 0, 0, 0.35836798, 0.9335804, 0, -0.9335804, 0.35836798, -0.472, 11.681, 5.865)
+projection = 2
+fov = 85.0
+size = 0.065
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=1916526783]
 script = ExtResource("8_xheak")

@@ -232,7 +232,8 @@ func _run_reveal_and_battle() -> void:
 	await get_tree().create_timer(
 		bot_think_time
 	).timeout
-
+	# کارت‌های Coverشده Bot درست هنگام Reveal ناپدید می‌شوند.
+	_remove_discarded_card_views()
 	await _reveal_cards_one_by_one(
 		pending_local_cards,
 		pending_bot_cards
@@ -453,7 +454,7 @@ func _sync_visual_state() -> void:
 	_spawn_hand_cards()
 	_spawn_opponent_hand_cards()
 	_refresh_board_disabled_visuals()
-
+	_refresh_pile_entities()
 func _spawn_dealer_cards() -> void:
 	for slot_id: int in DealerSlotID.all_slots():
 		var card: CardInstance = state.dealer.slots.get(
@@ -494,9 +495,10 @@ func _spawn_board_cards(
 		return
 
 	for slot_id: int in SlotID.all_slots():
-		var card: CardInstance = player.board.get_card(
-			slot_id
-		)
+		var card: CardInstance = \
+			player.board.get_card(
+				slot_id
+			)
 
 		if card == null:
 			continue
@@ -514,13 +516,28 @@ func _spawn_board_cards(
 			)
 			continue
 
-		_create_card_view(
-			card,
-			place.card_anchor.global_transform,
-			false
+		# فقط کارت‌های Board بازیکن محلی Drag می‌شوند.
+		var draggable: bool = (
+			player_id == local_player_id
 		)
 
+		var card_view: Card3D = \
+			_create_card_view(
+				card,
+				place.card_anchor.global_transform,
+				draggable
+			)
 
+		if card_view == null:
+			continue
+
+		if draggable:
+			card_view.drag_requested.connect(
+				Callable(
+					self,
+					"_start_card_drag"
+				)
+			)
 func _spawn_hand_cards() -> void:
 	var player: PlayerState = state.get_player(
 		local_player_id
@@ -578,6 +595,7 @@ func _create_card_view(
 		card_views[card.instance_id] = card_view
 
 	return card_view
+
 func _start_card_drag(
 	card_view: Card3D
 ) -> void:
@@ -609,9 +627,12 @@ func _start_card_drag(
 	):
 		return
 
-	if (
+	var card_zone: CardZone.Type = \
 		card_view.card_instance.zone
-		!= CardZone.Type.HAND
+
+	if (
+		card_zone != CardZone.Type.HAND
+		and card_zone != CardZone.Type.BOARD
 	):
 		return
 
@@ -667,7 +688,6 @@ func _move_dragged_card(
 
 	dragged_card.global_position = intersection
 
-
 func _finish_card_drag(
 	screen_position: Vector2
 ) -> void:
@@ -697,37 +717,107 @@ func _finish_card_drag(
 		card_view.return_home()
 		return
 
-	var played_card: CardInstance = \
+	var card: CardInstance = \
 		card_view.card_instance
 
-	var was_played: bool = engine.play_card(
-		local_player_id,
-		played_card,
-		place.logical_id
-	)
-
-	if not was_played:
+	if card == null:
 		card_view.return_home()
 		return
 
-	pending_local_cards.append(
-		played_card
-	)
+	var original_zone: CardZone.Type = \
+		card.zone
 
-	card_view.is_draggable = false
+	# -----------------------------------------
+	# کارت از Hand وارد Board می‌شود.
+	# -----------------------------------------
+	if original_zone == CardZone.Type.HAND:
+		var was_played: bool = \
+			engine.play_card(
+				local_player_id,
+				card,
+				place.logical_id
+			)
+		if not was_played:
+			card_view.return_home()
+			return
 
-	card_view.move_home(
-		place.card_anchor.global_transform
-	)
+		_remove_pile_card_views()
+		_spawn_missing_local_hand_cards()
 
-	hud.refresh(
-		state,
-		local_player_id
-	)
+		_refresh_pile_entities()
+		_refresh_board_disabled_visuals()
 
-	await _refresh_hand_positions()
+		pending_local_cards.append(
+			card
+		)
 
+		card_view.is_draggable = true
 
+		card_view.move_home(
+			place.card_anchor.global_transform
+		)
+
+		hud.refresh(
+			state,
+			local_player_id
+		)
+
+		await _refresh_hand_positions()
+		if not was_played:
+			card_view.return_home()
+			return
+
+		# برای سیستم Cover که قبلاً اضافه کردیم.
+		_remove_discarded_card_views()
+		_refresh_pile_entities()
+
+		pending_local_cards.append(card)
+
+		# کارت حالا روی Board است و می‌تواند Drag شود.
+		card_view.is_draggable = true
+
+		card_view.move_home(
+			place.card_anchor.global_transform
+		)
+
+		hud.refresh(
+			state,
+			local_player_id
+		)
+
+		await _refresh_hand_positions()
+		return
+
+	# -----------------------------------------
+	# کارت موجود روی Board جابه‌جا می‌شود.
+	# -----------------------------------------
+	if original_zone == CardZone.Type.BOARD:
+		var from_slot_id: int = \
+			card.current_slot
+
+		var was_moved: bool = \
+			engine.move_board_card(
+				local_player_id,
+				from_slot_id,
+				place.logical_id
+			)
+
+		if not was_moved:
+			card_view.return_home()
+			return
+
+		card_view.move_home(
+			place.card_anchor.global_transform
+		)
+
+		hud.refresh(
+			state,
+			local_player_id
+		)
+
+		return
+
+	card_view.return_home()
 func _get_place_under_mouse(
 	screen_position: Vector2
 ) -> CardPlace3D:
@@ -907,24 +997,28 @@ func _refresh_opponent_hand_positions() -> void:
 		card_view.move_home(
 			target_transform
 		)
+
 func _refresh_board_disabled_visuals() -> void:
-	if engine == null or engine.state == null:
+	if engine == null:
 		return
 
-	var combat_is_running: bool = (
-		engine.state.phase
-		== MatchPhase.Type.BATTLE
-	)
+	if engine.state == null:
+		return
 
 	for player_id: int in [1, 2]:
 		var player: PlayerState = \
-			engine.state.get_player(player_id)
+			engine.state.get_player(
+				player_id
+			)
 
 		if player == null:
 			continue
 
-		for card: CardInstance in \
-			player.board.get_occupied_cards():
+		for slot_id: int in SlotID.all_slots():
+			var card: CardInstance = \
+				player.board.get_card(
+					slot_id
+				)
 
 			if card == null:
 				continue
@@ -937,11 +1031,13 @@ func _refresh_board_disabled_visuals() -> void:
 			if card_view == null:
 				continue
 
-			var disabled: bool = (
-				combat_is_running
-				and card.disabled_combat_turn
-				== engine.state.turn_number
-			)
+			var disabled: bool = \
+				DisableGestureBehavior.is_card_disabled(
+					engine.state,
+					player_id,
+					slot_id,
+					card
+				)
 
 			card_view.set_disabled(disabled)
 func _start_animated_combat() -> void:
@@ -1242,3 +1338,128 @@ func _refresh_battle_scores() -> void:
 		engine.state.player_one.score,
 		engine.state.player_two.score
 	)
+
+
+func _remove_discarded_card_views() -> void:
+	for instance_id: Variant in card_views.keys():
+		var card_view := card_views.get(
+			instance_id,
+			null
+		) as Card3D
+
+		if card_view == null:
+			continue
+
+		if card_view.card_instance == null:
+			continue
+
+		if (
+			card_view.card_instance.zone
+			!= CardZone.Type.DISCARD
+		):
+			continue
+
+		card_views.erase(instance_id)
+		card_view.queue_free()
+
+
+func _refresh_pile_entities() -> void:
+	if state == null:
+		return
+
+	if not is_instance_valid(game_layout):
+		return
+
+	for player_id: int in [1, 2]:
+		var player: PlayerState = \
+			state.get_player(player_id)
+
+		if player == null:
+			continue
+
+		for pile_type: int in \
+			CardPile3D.Type.values():
+
+			var pile_entity: CardPile3D = \
+				game_layout.get_pile_entity(
+					player_id,
+					pile_type
+				)
+
+			if pile_entity == null:
+				continue
+
+			pile_entity.refresh_from_player(
+				player
+			)
+
+
+func _remove_pile_card_views() -> void:
+	for instance_id: Variant in card_views.keys():
+		var card_view := card_views.get(
+			instance_id,
+			null
+		) as Card3D
+
+		if card_view == null:
+			continue
+
+		var card: CardInstance = \
+			card_view.card_instance
+
+		if card == null:
+			continue
+
+		var is_in_hidden_pile: bool = (
+			card.zone == CardZone.Type.DRAW
+			or card.zone == CardZone.Type.DISCARD
+			or card.zone == CardZone.Type.RESERVE
+		)
+
+		if not is_in_hidden_pile:
+			continue
+
+		card_views.erase(instance_id)
+		card_view.queue_free()
+		
+func _spawn_missing_local_hand_cards() -> void:
+	var player: PlayerState = state.get_player(
+		local_player_id
+	)
+
+	if player == null:
+		return
+
+	for index: int in range(player.hand.size()):
+		var card: CardInstance = \
+			player.hand[index]
+
+		if card == null:
+			continue
+
+		if card_views.has(card.instance_id):
+			continue
+
+		var target_transform: Transform3D = \
+			game_layout.get_hand_transform(
+				local_player_id,
+				index,
+				player.hand.size()
+			)
+
+		var card_view: Card3D = \
+			_create_card_view(
+				card,
+				target_transform,
+				true
+			)
+
+		if card_view == null:
+			continue
+
+		card_view.drag_requested.connect(
+			Callable(
+				self,
+				"_start_card_drag"
+			)
+		)

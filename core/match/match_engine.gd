@@ -1,11 +1,11 @@
 class_name MatchEngine
 extends RefCounted
 
-
+const BOARD_MOVE_MANA_COST: int = 1
 var state: MatchState
 var card_factory: CardFactory = CardFactory.new()
 var active_battle_sequence: BattleSequence
-
+var covered_card: CardInstance = null
 func start_match(
 	rules: MatchRules,
 	player_one_deck: DeckDefinition,
@@ -74,12 +74,22 @@ func _run_dealer_enter_behaviors() -> void:
 
 
 
-func _setup_player(player: PlayerState) -> void:
-	player.mana_capacity = state.rules.starting_mana
-	player.current_mana = player.mana_capacity
+func _setup_player(
+	player: PlayerState
+) -> void:
+	if player == null:
+		return
 
-	for index: int in range(state.rules.starting_hand_size):
-		CardMover.draw_to_hand(player)
+	player.mana_capacity = \
+		state.rules.starting_mana
+
+	player.current_mana = \
+		player.mana_capacity
+
+	CardMover.draw_cards_to_hand(
+		player,
+		state.rules.starting_hand_size
+	)
 
 func play_card(
 	player_id: int,
@@ -92,12 +102,16 @@ func play_card(
 	if state.phase != MatchPhase.Type.MAIN:
 		return false
 
-	var player: PlayerState = state.get_player(player_id)
+	var player: PlayerState = state.get_player(
+		player_id
+	)
 
 	if player == null or card == null:
 		return false
+
 	if player.is_ready:
 		return false
+
 	if card.definition == null:
 		return false
 
@@ -110,19 +124,202 @@ func play_card(
 	if not SlotID.is_valid(slot_id):
 		return false
 
-	if not player.board.is_slot_empty(slot_id):
-		return false
+	var replaced_card: CardInstance = \
+		player.board.get_card(slot_id)
+
+	# Slot اشغال است؛ باید شرایط Cover بررسی شود.
+	if replaced_card != null:
+		if replaced_card.definition == null:
+			return false
+
+		# کارت باید حداقل یک Turn از زمان چیده‌شدنش گذشته باشد.
+# Turn ورود کارت و اولین Turn بعد از آن قابل Cover نیست.
+		var turns_since_played: int = (
+			state.turn_number
+			- replaced_card.turn_played
+		)
+
+		if turns_since_played < 2:
+			print(
+				"COVER FAILED | target card must survive "
+				+ "one full turn first"
+			)
+			return false
+
+		var new_gesture: CardGesture.Type = \
+			card.definition.gesture
+
+		var old_gesture: CardGesture.Type = \
+			replaced_card.definition.gesture
+
+		if not CardGesture.can_cover(
+			new_gesture,
+			old_gesture
+		):
+			print(
+				"COVER FAILED | ",
+				CardGesture.Type.keys()[new_gesture],
+				" cannot cover ",
+				CardGesture.Type.keys()[old_gesture]
+			)
+			return false
 
 	var mana_cost: int = card.definition.mana_cost
 
 	if player.current_mana < mana_cost:
 		return false
 
-	if not CardMover.hand_to_board(player, card, slot_id):
+	# اگر Slot اشغال بود، ابتدا کارت قدیمی Discard می‌شود.
+	if replaced_card != null:
+		var discarded_card: CardInstance = \
+			CardMover.board_to_discard(
+				player,
+				slot_id
+			)
+		if covered_card == null:
+			push_error(
+				"Cover failed: old card could not be removed."
+			)
+			return false
+		if discarded_card == null:
+			push_error(
+				"Cover failed: old card could not be discarded."
+			)
+			return false
+
+		print(
+			"CARD COVERED | old=",
+			discarded_card.definition.display_name,
+			" | new=",
+			card.definition.display_name,
+			" | slot=",
+			slot_id
+		)
+
+	# حالا Slot خالی است و کارت جدید وارد آن می‌شود.
+	if not CardMover.hand_to_board(
+		player,
+		card,
+		slot_id
+	):
+		push_error(
+			"Card could not enter the Board after Cover."
+		)
 		return false
 
 	player.current_mana -= mana_cost
 	card.turn_played = state.turn_number
+	if card.definition.behavior != null:
+		var play_context := CardBehaviorContext.new(
+			self,
+			state,
+			card,
+			player_id,
+			slot_id,
+			covered_card
+		)
+
+		card.definition.behavior.on_played_to_board(
+			play_context
+		)
+	return true
+
+
+func move_board_card(
+	player_id: int,
+	from_slot_id: int,
+	to_slot_id: int
+) -> bool:
+	if state == null:
+		return false
+
+	if state.phase != MatchPhase.Type.MAIN:
+		return false
+
+	var player: PlayerState = state.get_player(
+		player_id
+	)
+
+	if player == null:
+		return false
+
+	if player.is_ready:
+		return false
+
+	if not SlotID.is_valid(from_slot_id):
+		return false
+
+	if not SlotID.is_valid(to_slot_id):
+		return false
+
+	if from_slot_id == to_slot_id:
+		return false
+
+	# هر Turn فقط یک جابه‌جایی.
+	if (
+		player.board_move_used_turn
+		== state.turn_number
+	):
+		print(
+			"BOARD MOVE FAILED | already used this turn"
+		)
+		return false
+
+	var moving_card: CardInstance = \
+		player.board.get_card(
+			from_slot_id
+		)
+
+	if moving_card == null:
+		return false
+
+	if moving_card.owner_id != player_id:
+		return false
+
+	# مقصد باید کاملاً خالی باشد.
+	if not player.board.is_slot_empty(
+		to_slot_id
+	):
+		print(
+			"BOARD MOVE FAILED | destination occupied"
+		)
+		return false
+
+	if (
+		player.current_mana
+		< BOARD_MOVE_MANA_COST
+	):
+		print(
+			"BOARD MOVE FAILED | not enough mana"
+		)
+		return false
+
+	var moved: bool = player.board.move_card(
+		from_slot_id,
+		to_slot_id
+	)
+
+	if not moved:
+		return false
+
+	player.current_mana -= \
+		BOARD_MOVE_MANA_COST
+
+	player.board_move_used_turn = \
+		state.turn_number
+
+	print(
+		"BOARD CARD MOVED | player=",
+		player_id,
+		" | card=",
+		moving_card.definition.display_name,
+		" | from=",
+		from_slot_id,
+		" | to=",
+		to_slot_id,
+		" | mana_left=",
+		player.current_mana
+	)
 
 	return true
 
@@ -130,18 +327,44 @@ func play_card(
 func _start_new_turn_for_player(
 	player: PlayerState
 ) -> void:
+	if player == null:
+		return
+
+	# تمام کارت‌های باقی‌مانده Hand قبلی دور ریخته می‌شوند.
+	var discarded_hand_count: int = \
+		CardMover.discard_hand(player)
 
 	player.mana_capacity = mini(
-		player.mana_capacity + state.rules.mana_gain_per_turn,
+		player.mana_capacity
+			+ state.rules.mana_gain_per_turn,
 		state.rules.maximum_mana
 	)
 
-	player.current_mana = player.mana_capacity
+	player.current_mana = \
+		player.mana_capacity
 
-	for index: int in range(
-		state.rules.cards_drawn_per_turn
-	):
-		CardMover.draw_to_hand(player)
+	# Hand جدید ساخته می‌شود.
+	var drawn_cards: Array[CardInstance] = \
+		CardMover.draw_cards_to_hand(
+			player,
+			state.rules.cards_drawn_per_turn
+		)
+
+	print(
+		"NEW TURN HAND | player=",
+		player.player_id,
+		" | hand_discarded=",
+		discarded_hand_count,
+		" | drawn=",
+		drawn_cards.size(),
+		" | draw=",
+		player.draw_pile.size(),
+		" | discard=",
+		player.discard_pile.size(),
+		" | reserve=",
+		player.reserve_pile.size()
+	)
+
 
 func _run_start_combat_behaviors() -> void:
 	if state == null:
@@ -201,6 +424,7 @@ func _run_start_combat_behaviors() -> void:
 			continue
 
 		var context := CardBehaviorContext.new(
+			self,
 			state,
 			card,
 			player_id,
@@ -311,6 +535,216 @@ func apply_battle_act(
 	return true
 
 
+func _get_card_behavior(
+	card: CardInstance
+) -> CardBehavior:
+	if card == null:
+		return null
+
+	if card.definition == null:
+		return null
+
+	return card.definition.behavior
+
+
+func _card_destroys_defeated_player(
+	card: CardInstance
+) -> bool:
+	var behavior: CardBehavior = \
+		_get_card_behavior(card)
+
+	if behavior == null:
+		return false
+
+	return behavior.destroys_defeated_player_card()
+
+
+func _card_expires_after_combat(
+	card: CardInstance
+) -> bool:
+	var behavior: CardBehavior = \
+		_get_card_behavior(card)
+
+	if behavior == null:
+		return false
+
+	return behavior.expires_after_combat()
+
+
+func _send_board_card_to_reserve(
+	player_id: int,
+	card: CardInstance,
+	reason: String
+) -> bool:
+	if card == null:
+		return false
+
+	var player: PlayerState = state.get_player(
+		player_id
+	)
+
+	if player == null:
+		return false
+
+	var slot_id: int = card.current_slot
+
+	if not SlotID.is_valid(slot_id):
+		return false
+
+	# مطمئن می‌شویم همان CardInstance هنوز در همان Slot است.
+	if player.board.get_card(slot_id) != card:
+		return false
+
+	var removed_card: CardInstance = \
+		CardMover.board_to_reserve(
+			player,
+			slot_id
+		)
+
+	if removed_card == null:
+		return false
+
+	print(
+		reason,
+		" | player=",
+		player_id,
+		" | card=",
+		removed_card.definition.display_name,
+		" | slot=",
+		slot_id
+	)
+
+	return true
+
+
+func _resolve_killer_cards() -> void:
+	if state == null:
+		return
+
+	if active_battle_sequence == null:
+		return
+
+	# کارت‌هایی که توسط Killer شکست خورده‌اند.
+	var defeated_targets: Array[Dictionary] = []
+
+	# جلوگیری از ثبت دوباره یک CardInstance.
+	var defeated_instance_ids: Dictionary = {}
+
+	for act: BattleAct in active_battle_sequence.acts:
+		if act == null:
+			continue
+
+		if not act.resolved:
+			continue
+
+		# Killer فقط کارت Player مقابل را می‌کشد.
+		# نتیجه مقابل Dealer باعث حذف Dealer نمی‌شود.
+		if act.type != BattleAct.Type.PLAYER_VS_PLAYER:
+			continue
+
+		# Attacker برنده شده و Killer است.
+		if (
+			act.attacker_outcome
+			== BattleAct.Outcome.WIN
+			and _card_destroys_defeated_player(
+				act.attacker
+			)
+			and act.defender != null
+		):
+			if not defeated_instance_ids.has(
+				act.defender.instance_id
+			):
+				defeated_instance_ids[
+					act.defender.instance_id
+				] = true
+
+				defeated_targets.append({
+					"player_id":
+						act.defender_owner_id,
+					"card":
+						act.defender
+				})
+
+		# Defender برنده شده و Killer است.
+		if (
+			act.defender_outcome
+			== BattleAct.Outcome.WIN
+			and _card_destroys_defeated_player(
+				act.defender
+			)
+			and act.attacker != null
+		):
+			if not defeated_instance_ids.has(
+				act.attacker.instance_id
+			):
+				defeated_instance_ids[
+					act.attacker.instance_id
+				] = true
+
+				defeated_targets.append({
+					"player_id":
+						act.attacker_owner_id,
+					"card":
+						act.attacker
+				})
+
+	# اول کارت‌هایی که Killer شکست داده حذف می‌شوند.
+	for target: Dictionary in defeated_targets:
+		var target_player_id: int = int(
+			target["player_id"]
+		)
+
+		var target_card: CardInstance = \
+			target["card"] as CardInstance
+
+		_send_board_card_to_reserve(
+			target_player_id,
+			target_card,
+			"KILLER DESTROYED TARGET"
+		)
+
+	# بعد Snapshot تمام Killerهای باقی‌مانده را می‌گیریم.
+	var expiring_killers: Array[Dictionary] = []
+
+	for player_id: int in [1, 2]:
+		var player: PlayerState = state.get_player(
+			player_id
+		)
+
+		if player == null:
+			continue
+
+		for slot_id: int in SlotID.all_slots():
+			var card: CardInstance = \
+				player.board.get_card(slot_id)
+
+			if card == null:
+				continue
+
+			if not _card_expires_after_combat(card):
+				continue
+
+			expiring_killers.append({
+				"player_id": player_id,
+				"card": card
+			})
+
+	# تمام Killerها، چه برده باشند چه نه، از Board خارج می‌شوند.
+	for killer_entry: Dictionary in expiring_killers:
+		var killer_player_id: int = int(
+			killer_entry["player_id"]
+		)
+
+		var killer_card: CardInstance = \
+			killer_entry["card"] as CardInstance
+
+		_send_board_card_to_reserve(
+			killer_player_id,
+			killer_card,
+			"KILLER EXPIRED"
+		)
+
+
 func finish_combat() -> bool:
 	if state == null:
 		return false
@@ -319,6 +753,10 @@ func finish_combat() -> bool:
 		return false
 
 	state.phase = MatchPhase.Type.CLEANUP
+
+	# نتیجه تمام Clashها بررسی می‌شود.
+	# اهداف شکست‌خورده و خود Killerها وارد Reserve می‌شوند.
+	_resolve_killer_cards()
 
 	var dealer_ready: bool = \
 		DealerMover.deal_new_board(

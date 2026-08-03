@@ -5,10 +5,10 @@ extends Resource
 @export_category("Draw")
 
 @export_range(1, 10, 1)
-var starting_hand_size: int = 3
+var starting_hand_size: int = 5
 
 @export_range(1, 10, 1)
-var cards_drawn_per_turn: int = 3
+var cards_drawn_per_turn: int = 5
 
 
 @export_category("Scoring")

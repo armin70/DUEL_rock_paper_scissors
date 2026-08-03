@@ -67,6 +67,31 @@ extends Node3D
 			$OpponentBoard/BackRow/BackRight
 	}
 }
+
+@onready var pile_entities: Dictionary = {
+	1: {
+		CardPile3D.Type.DRAW:
+			$PlayerPiles/DrawPile,
+
+		CardPile3D.Type.DISCARD:
+			$PlayerPiles/DiscardPile,
+
+		CardPile3D.Type.RESERVE:
+			$PlayerPiles/ReservePile
+	},
+
+	2: {
+		CardPile3D.Type.DRAW:
+			$OpponentPiles/DrawPile,
+
+		CardPile3D.Type.DISCARD:
+			$OpponentPiles/DiscardPile,
+
+		CardPile3D.Type.RESERVE:
+			$OpponentPiles/ReservePile
+	}
+}
+
 func _ready() -> void:
 	_configure_dealer_places()
 	_configure_board_places()
@@ -182,3 +207,19 @@ func get_hand_transform(
 	)
 
 	return hand_origin.global_transform * local_transform
+
+
+func get_pile_entity(
+	player_id: int,
+	pile_type: CardPile3D.Type
+) -> CardPile3D:
+	var player_piles: Dictionary = \
+		pile_entities.get(
+			player_id,
+			{}
+		)
+
+	return player_piles.get(
+		pile_type,
+		null
+	) as CardPile3D

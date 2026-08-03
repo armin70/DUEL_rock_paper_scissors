@@ -4,6 +4,4 @@
 
 [resource]
 script = ExtResource("1_tb61g")
-starting_hand_size = 5
-cards_drawn_per_turn = 2
 metadata/_custom_type_script = "uid://b7wnyd3ah2kl3"

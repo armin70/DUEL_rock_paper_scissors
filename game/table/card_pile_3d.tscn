@@ -1,0 +1,26 @@
+[gd_scene format=3 uid="uid://mey4xdpnjtbf"]
+
+[ext_resource type="Script" uid="uid://lmnrtiwv8ddd" path="res://game/table/card_pile_3d.gd" id="1_2aryl"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_jmxk3"]
+size = Vector3(1.7, 0.06, 2.3)
+
+[node name="CardPile3d" type="Node3D" unique_id=1075737316]
+script = ExtResource("1_2aryl")
+
+[node name="StackMesh" type="MeshInstance3D" parent="." unique_id=1362363865]
+mesh = SubResource("BoxMesh_jmxk3")
+
+[node name="CardAnchor" type="Marker3D" parent="." unique_id=1624864197]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
+
+[node name="PileNameLabel" type="Label3D" parent="." unique_id=1279434495]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 1.45)
+billboard = 1
+font_size = 24
+
+[node name="CountLabel" type="Label3D" parent="." unique_id=993696427]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+billboard = 1
+text = "0"
+font_size = 40

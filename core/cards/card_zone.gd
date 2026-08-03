@@ -7,5 +7,6 @@ enum Type {
 	HAND,
 	BOARD,
 	DISCARD,
-	DEALER_BOARD
+	DEALER_BOARD,
+	RESERVE
 }

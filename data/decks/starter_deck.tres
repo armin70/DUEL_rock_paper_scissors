@@ -12,6 +12,8 @@
 [ext_resource type="Resource" uid="uid://bo0tp8kiejjtr" path="res://data/cards/disabler_paper.tres" id="9_c1s5y"]
 [ext_resource type="Resource" uid="uid://82b82wuwvg1w" path="res://data/cards/disabler_scissors.tres" id="10_pwffb"]
 [ext_resource type="Resource" uid="uid://booqvq64uq2sy" path="res://data/cards/mustache_rock.tres" id="11_c1s5y"]
+[ext_resource type="Resource" uid="uid://tlpd8apbnib6" path="res://data/cards/rock_demolisher.tres" id="12_pwffb"]
+[ext_resource type="Resource" uid="uid://b3xgbsolklyil" path="res://data/cards/killer_rock.tres" id="13_42qaq"]
 
 [sub_resource type="Resource" id="Resource_l1k4g"]
 script = ExtResource("1_colqg")
@@ -67,7 +69,19 @@ card = ExtResource("11_c1s5y")
 copies = 3
 metadata/_custom_type_script = "uid://dcjdk55xiluso"
 
+[sub_resource type="Resource" id="Resource_tx4j5"]
+script = ExtResource("1_colqg")
+card = ExtResource("12_pwffb")
+copies = 3
+metadata/_custom_type_script = "uid://dcjdk55xiluso"
+
+[sub_resource type="Resource" id="Resource_wby2k"]
+script = ExtResource("1_colqg")
+card = ExtResource("13_42qaq")
+copies = 2
+metadata/_custom_type_script = "uid://dcjdk55xiluso"
+
 [resource]
 script = ExtResource("2_kx3ku")
-entries = Array[ExtResource("1_colqg")]([SubResource("Resource_l1k4g"), SubResource("Resource_0xejx"), SubResource("Resource_332bh"), SubResource("Resource_i2hlg"), SubResource("Resource_c1s5y"), SubResource("Resource_pwffb"), SubResource("Resource_42qaq"), SubResource("Resource_br6ro"), SubResource("Resource_1li3d"), SubResource("Resource_un4ry")])
+entries = Array[ExtResource("1_colqg")]([SubResource("Resource_l1k4g"), SubResource("Resource_0xejx"), SubResource("Resource_332bh"), SubResource("Resource_i2hlg"), SubResource("Resource_c1s5y"), SubResource("Resource_pwffb"), SubResource("Resource_42qaq"), SubResource("Resource_br6ro"), SubResource("Resource_1li3d"), SubResource("Resource_un4ry"), SubResource("Resource_tx4j5"), SubResource("Resource_wby2k")])
 metadata/_custom_type_script = "uid://dsgb7xp50w70e"

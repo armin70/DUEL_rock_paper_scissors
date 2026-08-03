@@ -28,3 +28,19 @@ func modify_battle_outcome(
 	current_outcome: int
 ) -> int:
 	return current_outcome
+
+
+# آیا این کارت، کارت Player مقابل را پس از برد حذف می‌کند؟
+func destroys_defeated_player_card() -> bool:
+	return false
+
+
+# آیا این کارت بعد از پایان Combat از Board خارج می‌شود؟
+func expires_after_combat() -> bool:
+	return false
+
+
+func on_played_to_board(
+	_context: CardBehaviorContext
+) -> void:
+	pass

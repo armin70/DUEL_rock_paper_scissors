@@ -86,10 +86,17 @@ static func _create_player_vs_dealer_act(
 			dealer_card.definition.gesture
 		)
 
+	var player_card_is_disabled: bool = \
+		DisableGestureBehavior.is_card_disabled(
+			state,
+			player_id,
+			player_slot_id,
+			player_card
+		)
+
 	# کارت Disableشده اجازه Win ندارد.
 	if (
-		player_card.disabled_combat_turn
-		== state.turn_number
+		player_card_is_disabled
 		and outcome == BattleAct.Outcome.WIN
 	):
 		outcome = BattleAct.Outcome.TIE
@@ -137,20 +144,36 @@ static func _create_player_vs_player_act(
 		player_one_outcome
 	)
 
+	var player_one_is_disabled: bool = \
+		DisableGestureBehavior.is_card_disabled(
+			state,
+			1,
+			player_one_slot_id,
+			player_one_card
+		)
+
+	var player_two_is_disabled: bool = \
+		DisableGestureBehavior.is_card_disabled(
+			state,
+			2,
+			player_two_slot_id,
+			player_two_card
+		)
+
+
 	# اعمال Disabler روی Player 1
 	if (
-		player_one_card.disabled_combat_turn
-		== state.turn_number
+		player_one_is_disabled
 		and player_one_outcome
 		== BattleAct.Outcome.WIN
 	):
 		player_one_outcome = BattleAct.Outcome.TIE
 		player_two_outcome = BattleAct.Outcome.TIE
 
+
 	# اعمال Disabler روی Player 2
 	if (
-		player_two_card.disabled_combat_turn
-		== state.turn_number
+		player_two_is_disabled
 		and player_two_outcome
 		== BattleAct.Outcome.WIN
 	):
