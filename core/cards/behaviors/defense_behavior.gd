@@ -22,7 +22,7 @@ func on_start_combat(
 		return
 
 	source_card.shields_initialized = true
-	source_card.shield_count = starting_shields
+	source_card.shield_count += starting_shields
 
 	print(
 		"DEFENSE INITIALIZED | card=",

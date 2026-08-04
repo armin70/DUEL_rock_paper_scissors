@@ -6,6 +6,10 @@ var state: MatchState
 var card_factory: CardFactory = CardFactory.new()
 var active_battle_sequence: BattleSequence
 var covered_card: CardInstance = null
+var play_records_by_player: Dictionary = {
+	1: [],
+	2: []
+}
 func start_match(
 	rules: MatchRules,
 	player_one_deck: DeckDefinition,
@@ -124,9 +128,22 @@ func play_card(
 	if not SlotID.is_valid(slot_id):
 		return false
 
+	# برای قرارگرفتن در ردیف عقب،
+	# کارت جلوی همان ستون باید وجود داشته باشد.
+	if not _can_play_in_row_order(
+		player,
+		slot_id
+	):
+		print(
+			"PLAY FAILED | matching front slot "
+			+ "must be occupied first"
+		)
+		return false
+
 	var replaced_card: CardInstance = \
 		player.board.get_card(slot_id)
-
+	var board_before: Dictionary = \
+		_snapshot_board_cards(player)
 	# Slot اشغال است؛ باید شرایط Cover بررسی شود.
 	if replaced_card != null:
 		if replaced_card.definition == null:
@@ -222,6 +239,13 @@ func play_card(
 		card.definition.behavior.on_played_to_board(
 			play_context
 		)
+	_record_completed_play(
+		player_id,
+		card,
+		slot_id,
+		board_before
+	)
+
 	return true
 
 
@@ -254,7 +278,16 @@ func move_board_card(
 
 	if from_slot_id == to_slot_id:
 		return false
-
+	if not _can_move_in_row_order(
+		player,
+		from_slot_id,
+		to_slot_id
+	):
+		print(
+			"BOARD MOVE FAILED | front row must "
+			+ "remain full before using back row"
+		)
+		return false
 	# هر Turn فقط یک جابه‌جایی.
 	if (
 		player.board_move_used_turn
@@ -477,7 +510,8 @@ func begin_combat() -> BattleSequence:
 	state.phase = MatchPhase.Type.BATTLE
 	# همه Behaviorهای Start Combat قبل از ساخت صف اجرا می‌شوند.
 	_run_start_combat_behaviors()
-
+	if _check_score_victory():
+		return BattleSequence.new()
 	active_battle_sequence = \
 		BattleResolver.build_sequence(state)
 
@@ -519,17 +553,23 @@ func apply_battle_act(
 
 	act.resolved = true
 
+	var game_ended: bool = \
+		_check_score_victory()
+
 	print(
-		"BATTLE ACT RESOLVED | type=",
-		act.type,
-		" | attacker_player=",
-		act.attacker_owner_id,
-		" | attacker_points=",
-		act.attacker_points,
-		" | defender_player=",
-		act.defender_owner_id,
-		" | defender_points=",
-		act.defender_points
+		"VICTORY CHECK | P1=",
+		state.player_one.score,
+		" | P2=",
+		state.player_two.score,
+		" | difference=",
+		abs(
+			state.player_one.score
+			- state.player_two.score
+		),
+		" | target=",
+		state.rules.winning_score_difference,
+		" | ended=",
+		game_ended
 	)
 
 	return true
@@ -591,6 +631,18 @@ func _send_board_card_to_reserve(
 	if not SlotID.is_valid(slot_id):
 		return false
 
+	if not _can_play_in_row_order(
+		player,
+		slot_id
+	):
+		print(
+			"PLAY FAILED | front row must be full "
+			+ "before using the back row"
+		)
+		return false
+
+	var replaced_card: CardInstance = \
+		player.board.get_card(slot_id)
 	# مطمئن می‌شویم همان CardInstance هنوز در همان Slot است.
 	if player.board.get_card(slot_id) != card:
 		return false
@@ -788,8 +840,266 @@ func finish_combat() -> bool:
 	state.player_one.is_ready = false
 	state.player_two.is_ready = false
 
-	active_battle_sequence = null
 
 	state.phase = MatchPhase.Type.MAIN
+
+	return true
+
+
+func _get_required_front_slot(
+	target_slot_id: int
+) -> int:
+	match target_slot_id:
+		SlotID.Type.BACK_LEFT:
+			return SlotID.Type.FRONT_LEFT
+
+		SlotID.Type.BACK_MIDDLE_0:
+			return SlotID.Type.FRONT_MIDDLE_0
+
+		SlotID.Type.BACK_MIDDLE_1:
+			return SlotID.Type.FRONT_MIDDLE_1
+
+		SlotID.Type.BACK_RIGHT:
+			return SlotID.Type.FRONT_RIGHT
+
+	return -1
+
+
+func _get_matching_back_slot(
+	front_slot_id: int
+) -> int:
+	match front_slot_id:
+		SlotID.Type.FRONT_LEFT:
+			return SlotID.Type.BACK_LEFT
+
+		SlotID.Type.FRONT_MIDDLE_0:
+			return SlotID.Type.BACK_MIDDLE_0
+
+		SlotID.Type.FRONT_MIDDLE_1:
+			return SlotID.Type.BACK_MIDDLE_1
+
+		SlotID.Type.FRONT_RIGHT:
+			return SlotID.Type.BACK_RIGHT
+
+	return -1
+
+
+func _can_play_in_row_order(
+	player: PlayerState,
+	target_slot_id: int
+) -> bool:
+	if player == null:
+		return false
+
+	var required_front_slot: int = \
+		_get_required_front_slot(
+			target_slot_id
+		)
+
+	# مقصد یکی از Slotهای جلو است.
+	if required_front_slot == -1:
+		return true
+
+	# Slot عقب فقط وقتی قابل استفاده است
+	# که Slot جلوی همان ستون کارت داشته باشد.
+	return (
+		player.board.get_card(
+			required_front_slot
+		) != null
+	)
+
+
+func _can_move_in_row_order(
+	player: PlayerState,
+	from_slot_id: int,
+	to_slot_id: int
+) -> bool:
+	if player == null:
+		return false
+
+	# اگر از ردیف جلو حرکت می‌کنیم و پشت همان ستون
+	# کارت وجود دارد، اجازه نداریم جلوی آن را خالی کنیم.
+	var matching_back_slot: int = \
+		_get_matching_back_slot(
+			from_slot_id
+		)
+
+	if (
+		matching_back_slot != -1
+		and player.board.get_card(
+			matching_back_slot
+		) != null
+	):
+		return false
+
+	var required_front_slot: int = \
+		_get_required_front_slot(
+			to_slot_id
+		)
+
+	# حرکت به ردیف جلو آزاد است.
+	if required_front_slot == -1:
+		return true
+
+	# نمی‌توان همان کارت جلویی را به پشت خودش منتقل کرد؛
+	# چون بعد از حرکت Slot جلو خالی می‌شود.
+	if from_slot_id == required_front_slot:
+		return false
+
+	# مقصد عقب فقط با وجود کارت جلوی همان ستون باز است.
+	return (
+		player.board.get_card(
+			required_front_slot
+		) != null
+	)
+
+
+func clear_play_records(
+	player_id: int
+) -> void:
+	play_records_by_player[player_id] = []
+
+
+func consume_play_records(
+	player_id: int
+) -> Array[CardPlayRecord]:
+	var result: Array[CardPlayRecord] = []
+
+	var stored_records: Array = \
+		play_records_by_player.get(
+			player_id,
+			[]
+		)
+
+	for raw_record: Variant in stored_records:
+		var record: CardPlayRecord = \
+			raw_record as CardPlayRecord
+
+		if record != null:
+			result.append(record)
+
+	play_records_by_player[player_id] = []
+
+	return result
+
+
+func _snapshot_board_cards(
+	player: PlayerState
+) -> Dictionary:
+	var result: Dictionary = {}
+
+	if player == null:
+		return result
+
+	for slot_id: int in SlotID.all_slots():
+		var card: CardInstance = \
+			player.board.get_card(slot_id)
+
+		if card == null:
+			continue
+
+		result[card.instance_id] = card
+
+	return result
+
+
+func _is_card_still_on_board(
+	player: PlayerState,
+	target_card: CardInstance
+) -> bool:
+	if player == null:
+		return false
+
+	if target_card == null:
+		return false
+
+	for slot_id: int in SlotID.all_slots():
+		if (
+			player.board.get_card(slot_id)
+			== target_card
+		):
+			return true
+
+	return false
+
+
+func _record_completed_play(
+	player_id: int,
+	played_card: CardInstance,
+	slot_id: int,
+	board_before: Dictionary
+) -> void:
+	var player: PlayerState = \
+		state.get_player(player_id)
+
+	if player == null:
+		return
+
+	var record := CardPlayRecord.new()
+
+	record.card = played_card
+	record.owner_id = player_id
+	record.slot_id = slot_id
+
+	for raw_card: Variant in board_before.values():
+		var previous_card: CardInstance = \
+			raw_card as CardInstance
+
+		if previous_card == null:
+			continue
+
+		if not _is_card_still_on_board(
+			player,
+			previous_card
+		):
+			record.removed_cards.append(
+				previous_card
+			)
+
+	var stored_records: Array = \
+		play_records_by_player.get(
+			player_id,
+			[]
+		)
+
+	stored_records.append(record)
+
+	play_records_by_player[player_id] = \
+		stored_records
+
+
+func _check_score_victory() -> bool:
+	if state == null:
+		return false
+
+	if state.rules == null:
+		return false
+
+	if state.player_one == null:
+		return false
+
+	if state.player_two == null:
+		return false
+
+	var difference: int = (
+		state.player_one.score
+		- state.player_two.score
+	)
+
+	var required_difference: int = \
+		state.rules.winning_score_difference
+
+	if abs(difference) < required_difference:
+		return false
+
+	state.winner_id = 1 if difference > 0 else 2
+	state.phase = MatchPhase.Type.GAME_OVER
+
+	print("")
+	print("========== GAME OVER ==========")
+	print("WINNER ID: ", state.winner_id)
+	print("PLAYER 1 SCORE: ", state.player_one.score)
+	print("PLAYER 2 SCORE: ", state.player_two.score)
+	print("DIFFERENCE: ", abs(difference))
 
 	return true

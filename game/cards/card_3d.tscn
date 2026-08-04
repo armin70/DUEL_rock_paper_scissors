@@ -1,16 +1,17 @@
 [gd_scene format=3 uid="uid://dklk3d2njec5"]
 
 [ext_resource type="Script" uid="uid://d2dybtb4qsy1r" path="res://core/cards/card_3d.gd" id="1_hee7s"]
-[ext_resource type="Texture2D" uid="uid://bnq7dxmuosbax" path="res://icon.svg" id="2_bml1i"]
+[ext_resource type="Texture2D" uid="uid://cqpyeahmtmn43" path="res://art/Rps Card Design (11).png" id="2_bml1i"]
+[ext_resource type="Texture2D" uid="uid://cqouov0wam3j3" path="res://art/cards/16.png" id="3_mdc8w"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_fuxww"]
-size = Vector3(1.55, 0.12, 2.15)
+size = Vector3(1.55, 0.04, 2.15)
 
 [sub_resource type="QuadMesh" id="QuadMesh_hee7s"]
 size = Vector2(1.5, 2.1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hee7s"]
-size = Vector3(1.55, 0.12, 2.15)
+size = Vector3(1.55, 0.04, 2.15)
 
 [sub_resource type="QuadMesh" id="QuadMesh_bml1i"]
 size = Vector2(1.5, 2.1)
@@ -24,11 +25,11 @@ back_texture = ExtResource("2_bml1i")
 mesh = SubResource("BoxMesh_fuxww")
 
 [node name="CardArt" type="MeshInstance3D" parent="." unique_id=1330747358]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0.065, 0)
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0.03, 0)
 mesh = SubResource("QuadMesh_hee7s")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=709102180]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.04, 0)
 shape = SubResource("BoxShape3D_hee7s")
 
 [node name="CardName" type="Label3D" parent="." unique_id=2065700296]
@@ -44,3 +45,19 @@ mesh = SubResource("QuadMesh_bml1i")
 transform = Transform3D(1, 0, 0, 0, 1.1924881e-08, 1, 0, -1, 1.1924881e-08, 0, 0.1, 0)
 visible = false
 text = "DISABLED"
+
+[node name="ShieldBadge" type="Node3D" parent="." unique_id=1376067777]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.54474807, 0.1, -0.69304985)
+visible = false
+
+[node name="Sprite3D" type="Sprite3D" parent="ShieldBadge" unique_id=1190501965]
+unique_name_in_owner = true
+transform = Transform3D(0.05, 0, 0, 0, -2.1855695e-09, 0.05, 0, -0.05, -2.1855695e-09, -0.5722612, 0, 1.0442233)
+texture = ExtResource("3_mdc8w")
+
+[node name="ShieldCount" type="Label3D" parent="ShieldBadge" unique_id=913721196]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.16173661, 0, 0)
+text = "0
+"

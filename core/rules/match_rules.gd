@@ -33,3 +33,9 @@ var mana_gain_per_turn: int = 1
 
 @export_range(0, 20, 1)
 var maximum_mana: int = 10
+
+
+@export_category("Victory")
+
+@export_range(1, 200, 1)
+var winning_score_difference: int = 40

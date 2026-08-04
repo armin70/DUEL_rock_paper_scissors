@@ -10,7 +10,10 @@ var dealer: DealerState
 
 var turn_number: int = 0
 var phase: MatchPhase.Type = MatchPhase.Type.SETUP
-
+# صفر یعنی هنوز برنده‌ای نداریم.
+# 1 یعنی Player One.
+# 2 یعنی Player Two.
+var winner_id: int = 0
 
 func _init(
 	new_rules: MatchRules
@@ -30,3 +33,14 @@ func get_player(player_id: int) -> PlayerState:
 		return player_two
 
 	return null
+
+
+func get_score_difference() -> int:
+	if player_one == null or player_two == null:
+		return 0
+
+	return player_one.score - player_two.score
+
+
+func is_game_over() -> bool:
+	return phase == MatchPhase.Type.GAME_OVER

@@ -106,7 +106,22 @@ static func _create_player_vs_dealer_act(
 		dealer_card,
 		outcome
 	)
+
+	# Behavior ویژه نباید قانون Disabler را دور بزند.
+	if (
+		player_card_is_disabled
+		and outcome == BattleAct.Outcome.WIN
+	):
+		outcome = BattleAct.Outcome.TIE
+
+	# Shield روی نتیجه نهایی اعمال می‌شود.
+	outcome = _apply_shield_to_outcome(
+		player_card,
+		outcome
+	)
+
 	act.attacker_outcome = outcome
+
 	act.attacker_points = _points_for_outcome(
 		state,
 		outcome
@@ -209,6 +224,48 @@ static func _create_player_vs_player_act(
 		player_one_outcome = _opposite_outcome(
 			player_two_outcome
 		)
+
+	# بررسی نهایی Disabler بعد از تمام Behaviorها.
+	if (
+		player_one_is_disabled
+		and player_one_outcome
+		== BattleAct.Outcome.WIN
+	):
+		player_one_outcome = BattleAct.Outcome.TIE
+		player_two_outcome = BattleAct.Outcome.TIE
+
+	if (
+		player_two_is_disabled
+		and player_two_outcome
+		== BattleAct.Outcome.WIN
+	):
+		player_one_outcome = BattleAct.Outcome.TIE
+		player_two_outcome = BattleAct.Outcome.TIE
+
+	# Shield کارت Player 1
+	var player_one_after_shield: int = \
+		_apply_shield_to_outcome(
+			player_one_card,
+			player_one_outcome
+		)
+
+	if player_one_after_shield != player_one_outcome:
+		player_one_outcome = BattleAct.Outcome.TIE
+		player_two_outcome = BattleAct.Outcome.TIE
+
+
+	# Shield کارت Player 2
+	var player_two_after_shield: int = \
+		_apply_shield_to_outcome(
+			player_two_card,
+			player_two_outcome
+		)
+
+	if player_two_after_shield != player_two_outcome:
+		player_one_outcome = BattleAct.Outcome.TIE
+		player_two_outcome = BattleAct.Outcome.TIE
+
+
 
 	act.attacker_outcome = player_one_outcome
 	act.defender_outcome = player_two_outcome
@@ -392,6 +449,7 @@ static func _get_property_if_exists(
 			return object.get(property_name)
 
 	return null
+
 static func _add_dealer_attacks(
 	state: MatchState,
 	sequence: BattleSequence,
@@ -422,17 +480,18 @@ static func _add_dealer_attacks(
 
 	var target_slots: Array[int] = []
 	target_slots.assign(normal_dealer_slots)
-
-	# سنگ سیبیل Attack معمولی را با چهار Attack جایگزین می‌کند.
+	# Mustache Rock و Chainsaw در اولین فعال‌شدن
+	# به تمام کارت‌های Dealer حمله می‌کنند.
 	if (
 		attack_type
 		== CardBehavior.DealerAttackType.SWEEP_WIN
+		or attack_type
+		== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
 	):
 		target_slots.clear()
 		target_slots.assign(
 			DealerSlotID.all_slots()
 		)
-
 	for dealer_slot_id: int in target_slots:
 		var dealer_card: CardInstance = \
 			_get_dealer_card(
@@ -453,7 +512,7 @@ static func _add_dealer_attacks(
 				dealer_slot_id
 			)
 
-		# در حالت سنگ سیبیل هر چهار نتیجه مستقیم WIN هستند.
+		# Mustache Rock تمام Dealerها را قطعی می‌برد.
 		if (
 			attack_type
 			== CardBehavior.DealerAttackType.SWEEP_WIN
@@ -464,6 +523,20 @@ static func _add_dealer_attacks(
 			act.attacker_points = \
 				state.rules.win_points
 
+
+		# Chainsaw تمام Dealerها به‌جز ROCK را قطعی می‌برد.
+		elif (
+			attack_type
+			== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
+			and dealer_card.definition != null
+			and dealer_card.definition.gesture
+			!= CardGesture.Type.ROCK
+		):
+			act.attacker_outcome = \
+				BattleAct.Outcome.WIN
+
+			act.attacker_points = \
+				state.rules.win_points
 		sequence.add_act(act)
 
 static func _add_side_lane_sequence(
@@ -596,6 +669,37 @@ static func _add_middle_row_sequence(
 					player_two_slot_id
 				)
 			)
+			
+static func _apply_shield_to_outcome(
+	card: CardInstance,
+	current_outcome: int
+) -> int:
+	if card == null:
+		return current_outcome
+
+	# Shield فقط LOSS را متوقف می‌کند.
+	if current_outcome != BattleAct.Outcome.LOSS:
+		return current_outcome
+
+	if card.shield_count <= 0:
+		return current_outcome
+
+	card.shield_count -= 1
+
+	var card_name: String = "Unknown"
+
+	if card.definition != null:
+		card_name = card.definition.display_name
+
+	print(
+		"SHIELD USED | card=",
+		card_name,
+		" | shields_left=",
+		card.shield_count
+	)
+
+	return BattleAct.Outcome.TIE
+
 static func _apply_behavior_to_outcome(
 	state: MatchState,
 	source_card: CardInstance,

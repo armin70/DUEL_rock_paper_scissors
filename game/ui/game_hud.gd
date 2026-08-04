@@ -13,13 +13,30 @@ signal end_turn_pressed
 @onready var opponent_mana_label: Label = $Root/PlayerInfo/OpponentManaLabel
 @onready var end_turn_button: Button = $Root/EndTurnButton
 
+@onready var game_over_overlay: Control = \
+	%GameOverOverlay
 
+@onready var result_label: Label = \
+	%ResultLabel
+
+@onready var score_label: Label = \
+	%ScoreLabel
+
+@onready var restart_button: Button = \
+	%RestartButton
 
 func _ready() -> void:
 	end_turn_button.pressed.connect(
 		_on_end_turn_button_pressed
 	)
+	game_over_overlay.visible = false
 
+	restart_button.pressed.connect(
+		Callable(
+			self,
+			"_on_restart_button_pressed"
+		)
+	)
 
 func refresh(
 	state: MatchState,
@@ -91,3 +108,56 @@ func set_scores(
 	if opponent_score_label != null:
 		opponent_score_label.text = \
 			str(player_two_score)
+
+
+func show_game_over(
+	local_won: bool,
+	local_score: int,
+	opponent_score: int,
+	score_difference: int
+) -> void:
+	if local_won:
+		result_label.text = "YOU WIN"
+	else:
+		result_label.text = "YOU LOSE"
+
+	score_label.text = (
+		"YOUR SCORE: "
+		+ str(local_score)
+		+ "\n"
+		+ "OPPONENT SCORE: "
+		+ str(opponent_score)
+		+ "\n"
+		+ "SCORE DIFFERENCE: "
+		+ str(score_difference)
+	)
+
+	game_over_overlay.visible = true
+	game_over_overlay.modulate.a = 0.0
+
+	var tween: Tween = create_tween()
+
+	tween.set_trans(
+		Tween.TRANS_QUAD
+	)
+
+	tween.set_ease(
+		Tween.EASE_OUT
+	)
+
+	tween.tween_property(
+		game_over_overlay,
+		"modulate:a",
+		1.0,
+		0.35
+	)
+
+
+func _on_restart_button_pressed() -> void:
+	var reload_error: Error = \
+		get_tree().reload_current_scene()
+
+	if reload_error != OK:
+		push_error(
+			"Could not reload the current scene."
+		)

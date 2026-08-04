@@ -4,4 +4,5 @@
 
 [resource]
 script = ExtResource("1_tb61g")
+winning_score_difference = 30
 metadata/_custom_type_script = "uid://b7wnyd3ah2kl3"

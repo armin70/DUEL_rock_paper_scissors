@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://dp6ghb3kp71ga" path="res://game/match_controller_3d.gd" id="3_g4axw"]
 [ext_resource type="PackedScene" uid="uid://mey4xdpnjtbf" path="res://game/table/card_pile_3d.tscn" id="4_ult0l"]
 [ext_resource type="Resource" uid="uid://57vjxew312gp" path="res://data/rules/default_match_rules.tres" id="4_v3atx"]
+[ext_resource type="PackedScene" uid="uid://doelnx2jhw4b2" path="res://game/table/game_balance_scale_3d.tscn" id="5_8b6m4"]
 [ext_resource type="Resource" uid="uid://ry2pgu63y4qe" path="res://data/decks/starter_deck.tres" id="5_xheak"]
 [ext_resource type="Resource" uid="uid://btrccapipoth7" path="res://data/decks/dealer_deck.tres" id="6_pdiy6"]
 [ext_resource type="PackedScene" uid="uid://dklk3d2njec5" path="res://game/cards/card_3d.tscn" id="7_ult0l"]
@@ -34,7 +35,7 @@ surface_material_override/0 = SubResource("StandardMaterial3D_v3atx")
 [node name="BoardVisual" type="Node3D" parent="." unique_id=1145592782]
 
 [node name="JustLand" parent="BoardVisual" unique_id=777053995 instance=ExtResource("2_ult0l")]
-transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, 0, -0.15, 0)
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, 0.018, -0.15, -0.047)
 
 [node name="GameLayout" type="Node3D" parent="." unique_id=1507115213]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
@@ -190,7 +191,11 @@ pile_type = 2
 
 [node name="RuntimeCards" type="Node3D" parent="." unique_id=179306654]
 
-[node name="MatchController3D" type="Node3D" parent="." unique_id=1855810425 node_paths=PackedStringArray("game_layout", "runtime_cards", "camera_3d", "hud")]
+[node name="GameBalanceScale3d" parent="." unique_id=1049004180 instance=ExtResource("5_8b6m4")]
+transform = Transform3D(1.0390385, 0, 1.7089175, 0, 2, 0, -1.7089175, 0, 1.0390385, -4.4585266, 0.4706304, 0.9611156)
+max_tilt_degrees = 35.0
+
+[node name="MatchController3D" type="Node3D" parent="." unique_id=1855810425 node_paths=PackedStringArray("game_layout", "runtime_cards", "camera_3d", "hud", "balance_scale")]
 script = ExtResource("3_g4axw")
 rules = ExtResource("4_v3atx")
 player_one_deck = ExtResource("5_xheak")
@@ -201,17 +206,20 @@ card_scene = ExtResource("7_ult0l")
 runtime_cards = NodePath("../RuntimeCards")
 camera_3d = NodePath("../Camera3D")
 hud = NodePath("../HUD")
+balance_scale = NodePath("../GameBalanceScale3d")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1555863791]
-transform = Transform3D(0.8660254, 0.40957603, -0.28678823, 0, 0.57357645, 0.81915206, 0.5, -0.7094065, 0.49673176, 0, 0, 0)
+transform = Transform3D(0.8660254, 0.40957603, -0.28678823, 0, 0.57357645, 0.81915206, 0.5, -0.7094065, 0.49673176, 0, 18.107927, 0)
 light_energy = 1.5
 shadow_enabled = true
+shadow_opacity = 0.68
+shadow_blur = 2.625
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1403354002]
 environment = SubResource("Environment_g4axw")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=1052474298]
-transform = Transform3D(1, 0, 0, 0, 0.35836798, 0.9335804, 0, -0.9335804, 0.35836798, -0.472, 11.681, 5.865)
+transform = Transform3D(1, 0, 0, 0, 0.45399052, 0.8910065, 0, -0.8910065, 0.45399052, -0.472, 9.681, 6.865)
 projection = 2
 fov = 85.0
 size = 0.065
@@ -250,3 +258,61 @@ layout_mode = 0
 offset_top = 135.0
 offset_right = 40.0
 offset_bottom = 143.0
+
+[node name="GameOverOverlay" type="Control" parent="HUD" unique_id=773843070]
+unique_name_in_owner = true
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DarkBackground" type="ColorRect" parent="HUD/GameOverOverlay" unique_id=1350555880]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.14901961, 0, 0, 0.6392157)
+
+[node name="CenterContainer" type="CenterContainer" parent="HUD/GameOverOverlay" unique_id=908931724]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="GameOverPanel" type="PanelContainer" parent="HUD/GameOverOverlay/CenterContainer" unique_id=1770182422]
+custom_minimum_size = Vector2(520, 320)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="HUD/GameOverOverlay/CenterContainer/GameOverPanel" unique_id=1646837396]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="ResultLabel" type="Label" parent="HUD/GameOverOverlay/CenterContainer/GameOverPanel/Content" unique_id=124851630]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "YOU WIN"
+horizontal_alignment = 1
+
+[node name="ScoreLabel" type="Label" parent="HUD/GameOverOverlay/CenterContainer/GameOverPanel/Content" unique_id=1979214827]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Your Score: 0
+Opponent Score: 0"
+horizontal_alignment = 1
+
+[node name="RestartButton" type="Button" parent="HUD/GameOverOverlay/CenterContainer/GameOverPanel/Content" unique_id=2074560471]
+unique_name_in_owner = true
+layout_mode = 2
+text = "restart"

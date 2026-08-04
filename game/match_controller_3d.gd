@@ -4,7 +4,6 @@ extends Node3D
 
 const SLOT_COLLISION_MASK: int = 2
 
-
 @export_category("Match Resources")
 @export var rules: MatchRules
 @export var player_one_deck: DeckDefinition
@@ -18,6 +17,7 @@ const SLOT_COLLISION_MASK: int = 2
 @export var runtime_cards: Node3D
 @export var camera_3d: Camera3D
 @export var hud: GameHUD
+@export var balance_scale: GameBalanceScale3D
 
 
 @export_category("Drag")
@@ -46,11 +46,10 @@ var opponent_hand_views: Dictionary = {}
 var dragged_card: Card3D
 
 var pending_local_cards: Array[CardInstance] = []
-var pending_bot_cards: Array[CardInstance] = []
+var pending_bot_plays: Array[CardPlayRecord] = []
 
 
 func _ready() -> void:
-	
 	if not _resources_are_valid():
 		return
 
@@ -78,9 +77,9 @@ func _ready() -> void:
 
 	# ربات هم‌زمان با بازیکن، مخفیانه برنامه‌ریزی می‌کند.
 	_prepare_bot_turn()
-
+	_refresh_balance_scale()
+	
 	print("Simultaneous match started.")
-
 
 func _prepare_bot_turn() -> void:
 	if state == null:
@@ -89,9 +88,8 @@ func _prepare_bot_turn() -> void:
 	if state.phase != MatchPhase.Type.MAIN:
 		return
 
-	var bot: PlayerState = state.get_player(
-		bot_player_id
-	)
+	var bot: PlayerState = \
+		state.get_player(bot_player_id)
 
 	if bot == null:
 		return
@@ -99,32 +97,35 @@ func _prepare_bot_turn() -> void:
 	if bot.is_ready:
 		return
 
-	pending_bot_cards.clear()
+	pending_bot_plays.clear()
 
-	var previous_card_ids: Dictionary = \
-		_get_board_card_ids(bot_player_id)
+	# رکوردهای قبلی Bot پاک می‌شوند.
+	engine.clear_play_records(
+		bot_player_id
+	)
 
-	# کارت‌های ربات فقط داخل Engine قرار می‌گیرند.
-	# در اینجا ظاهر سه‌بعدی Refresh نمی‌شود.
+	# Bot فقط داخل Engine برنامه‌ریزی می‌کند.
+	# هیچ Viewای در این مرحله تغییر نمی‌کند.
 	bot_controller.play_turn(
 		engine,
 		bot_player_id
 	)
 
-	pending_bot_cards = _get_cards_not_in_snapshot(
-		bot_player_id,
-		previous_card_ids
-	)
+	# ترتیب واقعی Playهای Bot را نگه می‌داریم.
+	pending_bot_plays = \
+		engine.consume_play_records(
+			bot_player_id
+		)
 
-	engine.set_player_ready(bot_player_id)
+	engine.set_player_ready(
+		bot_player_id
+	)
 
 	print(
 		"Bot completed hidden planning with ",
-		pending_bot_cards.size(),
-		" new cards."
+		pending_bot_plays.size(),
+		" plays."
 	)
-
-
 func _get_board_card_ids(
 	player_id: int
 ) -> Dictionary:
@@ -236,22 +237,22 @@ func _run_reveal_and_battle() -> void:
 	_remove_discarded_card_views()
 	await _reveal_cards_one_by_one(
 		pending_local_cards,
-		pending_bot_cards
+		pending_bot_plays
 	)
 
 	pending_local_cards.clear()
-	pending_bot_cards.clear()
+	pending_bot_plays.clear()
 
 	await _start_animated_combat()
 
 
 func _reveal_cards_one_by_one(
 	player_cards: Array[CardInstance],
-	bot_cards: Array[CardInstance]
+	bot_plays: Array[CardPlayRecord]
 ) -> void:
 	var maximum_count: int = max(
 		player_cards.size(),
-		bot_cards.size()
+		bot_plays.size()
 	)
 
 	for index: int in range(maximum_count):
@@ -260,12 +261,32 @@ func _reveal_cards_one_by_one(
 				player_cards[index]
 			)
 
-		if index < bot_cards.size():
-			await _reveal_bot_card(
-				bot_cards[index]
+		if index < bot_plays.size():
+			await _reveal_bot_play(
+				bot_plays[index]
 			)
 
 	await _refresh_opponent_hand_positions()
+
+func _reveal_bot_play(
+	play_record: CardPlayRecord
+) -> void:
+	if play_record == null:
+		return
+
+	if play_record.card == null:
+		return
+
+	# اول خود کارت Bot وارد زمین می‌شود.
+	await _reveal_bot_card(
+		play_record.card,
+		play_record.slot_id
+	)
+
+	# بعد افکت همان کارت نمایش داده می‌شود.
+	await _reveal_removed_card_views(
+		play_record.removed_cards
+	)
 
 func _pulse_existing_card(
 	card: CardInstance
@@ -306,18 +327,10 @@ func _pulse_existing_card(
 
 
 func _reveal_bot_card(
-	card: CardInstance
+	card: CardInstance,
+	slot_id: int
 ) -> void:
-	var slot_id: int = _find_card_slot(
-		bot_player_id,
-		card
-	)
 
-	if slot_id == -1:
-		push_error(
-			"Could not find bot card slot."
-		)
-		return
 
 	var place: CardPlace3D = \
 		game_layout.get_board_place(
@@ -740,8 +753,11 @@ func _finish_card_drag(
 		if not was_played:
 			card_view.return_home()
 			return
-
-		_remove_pile_card_views()
+		# هنگام برنامه‌ریزی فقط تغییرات بازیکن خودمان
+		# اجازه دارند در تصویر نمایش داده شوند.
+		_remove_pile_card_views(
+			local_player_id
+		)
 		_spawn_missing_local_hand_cards()
 
 		_refresh_pile_entities()
@@ -1040,11 +1056,14 @@ func _refresh_board_disabled_visuals() -> void:
 				)
 
 			card_view.set_disabled(disabled)
+
 func _start_animated_combat() -> void:
 	interaction_locked = true
 
 	var sequence: BattleSequence = engine.begin_combat()
-
+	if state.phase == MatchPhase.Type.GAME_OVER:
+		_finish_game()
+		return
 	if sequence == null:
 		push_error("Could not begin battle sequence.")
 		interaction_locked = false
@@ -1056,7 +1075,9 @@ func _start_animated_combat() -> void:
 
 	_refresh_board_disabled_visuals()
 	_refresh_battle_scores()
-
+	if state.phase == MatchPhase.Type.GAME_OVER:
+		_finish_game()
+		return
 	print(
 		"ANIMATED COMBAT STARTED | acts=",
 		sequence.acts.size()
@@ -1078,13 +1099,21 @@ func _start_animated_combat() -> void:
 		await _animate_battle_act(act)
 
 		engine.apply_battle_act(act)
-
+		_refresh_board_shield_visuals()
 		_refresh_battle_scores()
+
+		# به‌محض رسیدن اختلاف امتیاز به حد برد،
+		# ادامه Combat متوقف می‌شود.
+		if state.phase == MatchPhase.Type.GAME_OVER:
+			_finish_game()
+			return
 
 		await get_tree().create_timer(
 			0.25
 		).timeout
-
+	if state.phase == MatchPhase.Type.GAME_OVER:
+		_finish_game()
+		return
 	engine.finish_combat()
 
 	# اینجا هم باید await داشته باشد.
@@ -1338,7 +1367,7 @@ func _refresh_battle_scores() -> void:
 		engine.state.player_one.score,
 		engine.state.player_two.score
 	)
-
+	_refresh_balance_scale()
 
 func _remove_discarded_card_views() -> void:
 	for instance_id: Variant in card_views.keys():
@@ -1393,13 +1422,17 @@ func _refresh_pile_entities() -> void:
 				player
 			)
 
+func _remove_pile_card_views(
+	owner_filter: int = -1
+) -> void:
+	var card_ids: Array = card_views.keys()
 
-func _remove_pile_card_views() -> void:
-	for instance_id: Variant in card_views.keys():
-		var card_view := card_views.get(
-			instance_id,
-			null
-		) as Card3D
+	for raw_id: Variant in card_ids:
+		var card_view: Card3D = \
+			card_views.get(
+				raw_id,
+				null
+			) as Card3D
 
 		if card_view == null:
 			continue
@@ -1410,18 +1443,23 @@ func _remove_pile_card_views() -> void:
 		if card == null:
 			continue
 
-		var is_in_hidden_pile: bool = (
+		if (
+			owner_filter != -1
+			and card.owner_id != owner_filter
+		):
+			continue
+
+		var is_in_pile: bool = (
 			card.zone == CardZone.Type.DRAW
 			or card.zone == CardZone.Type.DISCARD
 			or card.zone == CardZone.Type.RESERVE
 		)
 
-		if not is_in_hidden_pile:
+		if not is_in_pile:
 			continue
 
-		card_views.erase(instance_id)
+		card_views.erase(raw_id)
 		card_view.queue_free()
-		
 func _spawn_missing_local_hand_cards() -> void:
 	var player: PlayerState = state.get_player(
 		local_player_id
@@ -1463,3 +1501,176 @@ func _spawn_missing_local_hand_cards() -> void:
 				"_start_card_drag"
 			)
 		)
+
+
+func _reveal_removed_card_views(
+	removed_cards: Array[CardInstance]
+) -> void:
+	if removed_cards.is_empty():
+		return
+
+	await get_tree().create_timer(
+		0.12
+	).timeout
+
+	for removed_card: CardInstance in removed_cards:
+		if removed_card == null:
+			continue
+
+		var card_view: Card3D = \
+			card_views.get(
+				removed_card.instance_id,
+				null
+			) as Card3D
+
+		if card_view == null:
+			continue
+
+		card_views.erase(
+			removed_card.instance_id
+		)
+
+		var tween: Tween = create_tween()
+
+		tween.tween_property(
+			card_view,
+			"scale",
+			Vector3.ZERO,
+			reveal_step_time * 0.35
+		)
+
+		tween.tween_callback(
+			Callable(
+				card_view,
+				"queue_free"
+			)
+		)
+
+	await get_tree().create_timer(
+		reveal_step_time * 0.35
+	).timeout
+func _finish_game() -> void:
+	interaction_locked = true
+
+	hud.set_interaction_enabled(false)
+
+	hud.refresh(
+		state,
+		local_player_id
+	)
+
+	pending_local_cards.clear()
+	pending_bot_plays.clear()
+
+	var local_won: bool = (
+		state.winner_id
+		== local_player_id
+	)
+
+	var local_score: int
+
+	var opponent_score: int
+
+	if local_player_id == 1:
+		local_score = state.player_one.score
+		opponent_score = state.player_two.score
+	else:
+		local_score = state.player_two.score
+		opponent_score = state.player_one.score
+
+	var score_difference: int = abs(
+		local_score
+		- opponent_score
+	)
+
+	hud.show_game_over(
+		local_won,
+		local_score,
+		opponent_score,
+		score_difference
+	)
+
+	if local_won:
+		print(
+			"YOU WIN | difference=",
+			score_difference
+		)
+	else:
+		print(
+			"YOU LOSE | difference=",
+			score_difference
+		)
+func _refresh_balance_scale() -> void:
+	if balance_scale == null:
+		return
+
+	if state == null:
+		return
+
+	if state.rules == null:
+		return
+
+	balance_scale.set_balance(
+		state.player_one.score,
+		state.player_two.score,
+		state.rules.winning_score_difference
+	)
+
+
+func _refresh_board_shield_visuals(
+	animate_change: bool = true
+) -> void:
+	for card_instance_id: int in card_views:
+		var card_view: Card3D = card_views[
+			card_instance_id
+		]
+
+		if card_view == null:
+			continue
+
+		var card: CardInstance = (
+			_find_board_card_by_instance_id(
+				card_instance_id
+			)
+		)
+
+		if card == null:
+			card_view.set_shield_count(
+				0,
+				false
+			)
+			continue
+
+		card_view.set_shield_count(
+			card.shield_count,
+			animate_change
+		)
+
+
+func _find_board_card_by_instance_id(
+	instance_id: int
+) -> CardInstance:
+	if state == null:
+		return null
+
+	for player_id: int in [1, 2]:
+		var player: PlayerState = state.get_player(
+			player_id
+		)
+
+		if player == null:
+			continue
+
+		for slot_id: int in SlotID.all_slots():
+			var card: CardInstance = \
+				player.board.get_card(
+					slot_id
+				)
+
+			if card == null:
+				continue
+
+			if card.instance_id == instance_id:
+				return card
+
+	return null

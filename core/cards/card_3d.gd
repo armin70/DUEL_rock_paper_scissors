@@ -14,11 +14,16 @@ var is_draggable: bool = false
 
 @onready var card_art: MeshInstance3D = $CardArt
 @onready var disabled_label: Label3D = $DisabledLabel
-
+@onready var shield_badge: Node3D = %ShieldBadge
+@onready var shield_count_label: Label3D = %ShieldCount
+var displayed_shield_count: int = 0
+var shield_badge_base_scale: Vector3 = Vector3.ONE
 var card_material: StandardMaterial3D
 
 var is_disabled: bool = false
 func _ready() -> void:
+	shield_badge_base_scale = shield_badge.scale
+	shield_badge.visible = false
 	collision_layer = 1
 	collision_mask = 0
 	input_ray_pickable = true
@@ -113,3 +118,47 @@ func set_disabled(value: bool) -> void:
 	is_disabled = value
 
 	disabled_label.visible = value
+
+
+func set_shield_count(
+	new_count: int,
+	animate_change: bool = true
+) -> void:
+	new_count = maxi(new_count, 0)
+
+	var previous_count: int = displayed_shield_count
+	displayed_shield_count = new_count
+
+	shield_badge.visible = new_count > 0
+
+	if new_count <= 0:
+		return
+
+	shield_count_label.text = str(new_count)
+
+	if animate_change and new_count != previous_count:
+		_play_shield_badge_pulse()
+
+
+func _play_shield_badge_pulse() -> void:
+	shield_badge.scale = (
+		shield_badge_base_scale
+		* 1.35
+	)
+
+	var tween: Tween = create_tween()
+
+	tween.set_trans(
+		Tween.TRANS_BACK
+	)
+
+	tween.set_ease(
+		Tween.EASE_OUT
+	)
+
+	tween.tween_property(
+		shield_badge,
+		"scale",
+		shield_badge_base_scale,
+		0.25
+	)

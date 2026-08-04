@@ -4,7 +4,8 @@ extends Resource
 
 enum DealerAttackType {
 	NORMAL,
-	SWEEP_WIN
+	SWEEP_WIN,
+	CHAINSAW_SWEEP
 }
 
 
