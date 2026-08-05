@@ -1,9 +1,18 @@
 class_name MatchController3D
 extends Node3D
-
-
+@export var saw_vfx_spawn: Node3D
+@export var saw_sound_volume_db: float = 0.0
 const SLOT_COLLISION_MASK: int = 2
+@export_category("Mustache VFX")
 
+@export var MUSTACHE_VFX_SCENE: PackedScene
+
+@export var mustache_vfx_spawn: Node3D
+
+@export_range(0.5, 10.0, 0.1)
+var mustache_vfx_lifetime: float = 5.0
+@export_category("VFX")
+@export var SAW_DIRT_SCENE: PackedScene
 @export_category("Match Resources")
 @export var rules: MatchRules
 @export var player_one_deck: DeckDefinition
@@ -422,7 +431,7 @@ func _reveal_bot_card(
 	card_view.move_home(
 		target_transform
 	)
-
+	_refresh_board_disabled_visuals()
 	card_views[
 		card.instance_id
 	] = card_view
@@ -496,7 +505,6 @@ func _spawn_dealer_cards() -> void:
 			false
 		)
 
-
 func _spawn_board_cards(
 	player_id: int
 ) -> void:
@@ -523,13 +531,8 @@ func _spawn_board_cards(
 			)
 
 		if place == null:
-			push_error(
-				"Missing place for player %d, slot %d"
-				% [player_id, slot_id]
-			)
 			continue
 
-		# فقط کارت‌های Board بازیکن محلی Drag می‌شوند.
 		var draggable: bool = (
 			player_id == local_player_id
 		)
@@ -625,33 +628,38 @@ func _start_card_drag(
 		local_player_id
 	)
 
-	if player == null or player.is_ready:
+	if player == null:
+		return
+
+	if player.is_ready:
 		return
 
 	if card_view == null:
 		return
 
-	if card_view.card_instance == null:
+	var card: CardInstance = \
+		card_view.card_instance
+
+	if card == null:
+		return
+
+	if card.owner_id != local_player_id:
 		return
 
 	if (
-		card_view.card_instance.owner_id
-		!= local_player_id
+		card.zone != CardZone.Type.HAND
+		and card.zone != CardZone.Type.BOARD
 	):
 		return
 
-	var card_zone: CardZone.Type = \
-		card_view.card_instance.zone
-
-	if (
-		card_zone != CardZone.Type.HAND
-		and card_zone != CardZone.Type.BOARD
-	):
-		return
+	print(
+		"DRAG STARTED | card=",
+		card.definition.display_name,
+		" | zone=",
+		CardZone.Type.keys()[card.zone]
+	)
 
 	dragged_card = card_view
-
-
 func _input(event: InputEvent) -> void:
 	if dragged_card == null:
 		return
@@ -753,6 +761,7 @@ func _finish_card_drag(
 		if not was_played:
 			card_view.return_home()
 			return
+		
 		# هنگام برنامه‌ریزی فقط تغییرات بازیکن خودمان
 		# اجازه دارند در تصویر نمایش داده شوند.
 		_remove_pile_card_views(
@@ -808,23 +817,33 @@ func _finish_card_drag(
 	# کارت موجود روی Board جابه‌جا می‌شود.
 	# -----------------------------------------
 	if original_zone == CardZone.Type.BOARD:
-		var from_slot_id: int = \
-			card.current_slot
+		var from_slot_id: int = card.current_slot
+		var to_slot_id: int = place.logical_id
 
-		var was_moved: bool = \
-			engine.move_board_card(
-				local_player_id,
-				from_slot_id,
-				place.logical_id
-			)
+		var was_moved: bool = engine.move_board_card(
+			local_player_id,
+			from_slot_id,
+			to_slot_id
+		)
 
 		if not was_moved:
 			card_view.return_home()
 			return
 
+		# کارت Coverشده چون وارد Discard شده،
+		# همان لحظه View آن پاک می‌شود.
+		_remove_pile_card_views(
+			local_player_id
+		)
+
+		_refresh_pile_entities()
+
+		# کارت درگ‌شده همان لحظه جای مقصد می‌نشیند.
 		card_view.move_home(
 			place.card_anchor.global_transform
 		)
+
+		_refresh_board_disabled_visuals()
 
 		hud.refresh(
 			state,
@@ -832,7 +851,6 @@ func _finish_card_drag(
 		)
 
 		return
-
 	card_view.return_home()
 func _get_place_under_mouse(
 	screen_position: Vector2
@@ -1082,13 +1100,29 @@ func _start_animated_combat() -> void:
 		"ANIMATED COMBAT STARTED | acts=",
 		sequence.acts.size()
 	)
-
+	var mustache_vfx_played: bool = false
+	var saw_vfx_played: bool = false
 	while sequence.has_next():
 		var act: BattleAct = sequence.get_next()
 
 		if act == null:
 			continue
+		if act.type == BattleAct.Type.PLAYER_VS_DEALER:
+			if (
+				act.dealer_attack_type
+				== CardBehavior.DealerAttackType.SWEEP_WIN
+				and not mustache_vfx_played
+			):
+				mustache_vfx_played = true
+				await _play_mustache_vfx()
 
+			elif (
+				act.dealer_attack_type
+				== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
+				and not saw_vfx_played
+			):
+				saw_vfx_played = true
+				await _play_saw_dirt_vfx()
 		print(
 			"ANIMATING ACT | type=",
 			act.type,
@@ -1142,8 +1176,415 @@ func _animate_battle_act(
 			await _animate_player_clash(
 				act
 			)
-		
 
+func _play_mustache_card_sequence(
+	act: BattleAct
+) -> void:
+	if act == null:
+		return
+
+	if act.attacker == null:
+		return
+
+	if mustache_vfx_spawn == null:
+		push_error("Mustache VFX Spawn is missing.")
+		return
+
+	var affected_views: Array[Card3D] = []
+	var start_positions: Array[Vector3] = []
+
+	# خود کارت سنگ سیبیل
+	var mustache_view := card_views.get(
+		act.attacker.instance_id,
+		null
+	) as Card3D
+
+	if mustache_view != null:
+		affected_views.append(mustache_view)
+		start_positions.append(
+			mustache_view.global_position
+		)
+
+	# تمام کارت‌های ROCK دیلر
+	for dealer_slot_id: int in DealerSlotID.all_slots():
+		var dealer_card: CardInstance = \
+			state.dealer.slots.get(
+				dealer_slot_id,
+				null
+			) as CardInstance
+
+		if dealer_card == null:
+			continue
+
+		if dealer_card.definition == null:
+			continue
+
+		if (
+			dealer_card.definition.gesture
+			!= CardGesture.Type.ROCK
+		):
+			continue
+
+		var rock_view := card_views.get(
+			dealer_card.instance_id,
+			null
+		) as Card3D
+
+		if rock_view == null:
+			continue
+
+		if affected_views.has(rock_view):
+			continue
+
+		affected_views.append(rock_view)
+		start_positions.append(
+			rock_view.global_position
+		)
+
+	# حتی اگر View پیدا نشد، خود VFX اجرا شود.
+	if affected_views.is_empty():
+		await _play_mustache_vfx()
+		return
+
+	var center_position: Vector3 = \
+		mustache_vfx_spawn.global_position
+
+	# همه کارت‌ها هم‌زمان به وسط می‌روند.
+	var gather_tween: Tween = create_tween()
+	gather_tween.set_parallel(true)
+
+	for card_view: Card3D in affected_views:
+		gather_tween.tween_property(
+			card_view,
+			"global_position",
+			center_position,
+			0.28
+		).set_trans(
+			Tween.TRANS_QUAD
+		).set_ease(
+			Tween.EASE_IN
+		)
+
+	await gather_tween.finished
+
+	# در وسط غیب می‌شوند.
+	for card_view: Card3D in affected_views:
+		if is_instance_valid(card_view):
+			card_view.visible = false
+
+	# انیمیشن مخصوص فقط یک بار اجرا می‌شود.
+	await _play_mustache_vfx()
+
+	# دوباره در همان نقطه ظاهر می‌شوند.
+	for card_view: Card3D in affected_views:
+		if not is_instance_valid(card_view):
+			continue
+
+		card_view.global_position = center_position
+		card_view.visible = true
+
+	# هم‌زمان به جای اصلی برمی‌گردند.
+	var return_tween: Tween = create_tween()
+	return_tween.set_parallel(true)
+
+	for index: int in range(affected_views.size()):
+		var card_view: Card3D = affected_views[index]
+
+		if not is_instance_valid(card_view):
+			continue
+
+		return_tween.tween_property(
+			card_view,
+			"global_position",
+			start_positions[index],
+			0.32
+		).set_trans(
+			Tween.TRANS_QUAD
+		).set_ease(
+			Tween.EASE_OUT
+		)
+
+	await return_tween.finished
+
+
+func _play_mustache_vfx() -> void:
+	if MUSTACHE_VFX_SCENE == null:
+		push_error("Mustache VFX Scene is missing.")
+		return
+
+	if mustache_vfx_spawn == null:
+		push_error("Mustache VFX Spawn is missing.")
+		return
+
+	var holder := Node3D.new()
+	add_child(holder)
+
+	holder.top_level = true
+	holder.global_transform = \
+		mustache_vfx_spawn.global_transform
+
+	var mustache_vfx := \
+		MUSTACHE_VFX_SCENE.instantiate() as Node3D
+
+	if mustache_vfx == null:
+		holder.queue_free()
+		push_error("Mustache VFX could not be instantiated.")
+		return
+
+	holder.add_child(mustache_vfx)
+
+	await get_tree().process_frame
+
+	var animation_player := \
+		mustache_vfx.find_child(
+			"AnimationPlayer",
+			true,
+			false
+		) as AnimationPlayer
+
+	if animation_player == null:
+		holder.queue_free()
+		push_error(
+			"Mustache VFX AnimationPlayer was not found."
+		)
+		return
+
+	var animation_name: StringName = \
+		animation_player.get_autoplay()
+
+	if animation_name == &"":
+		if animation_player.has_animation(&"move"):
+			animation_name = &"move"
+		else:
+			for candidate: StringName in \
+					animation_player.get_animation_list():
+
+				if candidate == &"RESET":
+					continue
+
+				animation_name = candidate
+				break
+
+	if animation_name == &"":
+		holder.queue_free()
+		push_error(
+			"Mustache VFX has no playable animation."
+		)
+		return
+
+	print(
+		"MUSTACHE VFX STARTED | animation=",
+		animation_name
+	)
+
+	animation_player.play(animation_name)
+
+	await animation_player.animation_finished
+
+	if is_instance_valid(holder):
+		holder.queue_free()
+func _play_saw_dirt_vfx() -> void:
+	if SAW_DIRT_SCENE == null:
+		push_error("Saw Dirt Scene is missing.")
+		return
+
+	if saw_vfx_spawn == null:
+		push_error("Saw VFX Spawn is missing.")
+		return
+
+	var holder := Node3D.new()
+	add_child(holder)
+
+	holder.top_level = true
+	holder.global_transform = saw_vfx_spawn.global_transform
+
+	var saw_vfx := SAW_DIRT_SCENE.instantiate() as Node3D
+
+	if saw_vfx == null:
+		holder.queue_free()
+		push_error("Saw VFX could not be instantiated.")
+		return
+
+	holder.add_child(saw_vfx)
+
+	# صبر می‌کنیم تمام Childها وارد SceneTree شوند.
+	await get_tree().process_frame
+
+	# ریشه و تمام فرزندان VFX را جمع می‌کنیم.
+	var all_nodes: Array[Node] = [saw_vfx]
+	var node_index: int = 0
+
+	while node_index < all_nodes.size():
+		var current_node: Node = all_nodes[node_index]
+
+		for child: Node in current_node.get_children():
+			all_nodes.append(child)
+
+		node_index += 1
+
+	var maximum_duration: float = 0.0
+	var started_component_count: int = 0
+
+	# اول تمام AnimationTreeها فعال می‌شوند.
+	for node: Node in all_nodes:
+		if node is AnimationTree:
+			var animation_tree := node as AnimationTree
+			animation_tree.active = true
+
+	# تمام AnimationPlayerها بدون await پشت سر هم شروع می‌شوند.
+	for node: Node in all_nodes:
+		if not node is AnimationPlayer:
+			continue
+
+		var animation_player := node as AnimationPlayer
+		var animation_name: StringName = animation_player.autoplay
+
+		if animation_name == &"":
+			if animation_player.has_animation(&"move"):
+				animation_name = &"move"
+			else:
+				for candidate: StringName in \
+						animation_player.get_animation_list():
+
+					if candidate == &"RESET":
+						continue
+
+					animation_name = candidate
+					break
+
+		if animation_name == &"":
+			continue
+
+		var animation: Animation = \
+			animation_player.get_animation(
+				animation_name
+			)
+
+		if animation != null:
+			maximum_duration = maxf(
+				maximum_duration,
+				animation.length
+			)
+
+		animation_player.stop()
+		animation_player.play(animation_name)
+
+		# Trackهای زمان صفر، از جمله Audio Track،
+		# همین فریم پردازش می‌شوند.
+		animation_player.advance(0.0)
+
+		started_component_count += 1
+
+		print(
+			"SAW ANIMATION STARTED | ",
+			animation_player.get_path(),
+			" | animation=",
+			animation_name
+		)
+
+	# تمام Particleها، Spriteها و صداها هم در همان فریم شروع می‌شوند.
+	for node: Node in all_nodes:
+		if node is GPUParticles3D:
+			var gpu_particles := node as GPUParticles3D
+
+			gpu_particles.restart()
+			gpu_particles.emitting = true
+
+			var particle_duration: float = (
+				gpu_particles.lifetime
+				/ maxf(gpu_particles.speed_scale, 0.01)
+			)
+
+			maximum_duration = maxf(
+				maximum_duration,
+				particle_duration
+			)
+
+			started_component_count += 1
+
+		elif node is CPUParticles3D:
+			var cpu_particles := node as CPUParticles3D
+
+			cpu_particles.restart()
+			cpu_particles.emitting = true
+
+			var particle_duration: float = (
+				cpu_particles.lifetime
+				/ maxf(cpu_particles.speed_scale, 0.01)
+			)
+
+			maximum_duration = maxf(
+				maximum_duration,
+				particle_duration
+			)
+
+			started_component_count += 1
+
+		elif node is AnimatedSprite3D:
+			var animated_sprite_3d := node as AnimatedSprite3D
+			animated_sprite_3d.play()
+			started_component_count += 1
+
+		elif node is AnimatedSprite2D:
+			var animated_sprite_2d := node as AnimatedSprite2D
+			animated_sprite_2d.play()
+			started_component_count += 1
+
+		elif node is AudioStreamPlayer:
+			var audio_player := node as AudioStreamPlayer
+
+			if audio_player.stream == null:
+				continue
+
+			maximum_duration = maxf(
+				maximum_duration,
+				audio_player.stream.get_length()
+			)
+
+			audio_player.play()
+			started_component_count += 1
+
+			print(
+				"SAW AUDIO STARTED | ",
+				audio_player.get_path()
+			)
+
+		elif node is AudioStreamPlayer3D:
+			var audio_player_3d := node as AudioStreamPlayer3D
+
+			if audio_player_3d.stream == null:
+				continue
+
+			# صدای سه‌بعدی موقتاً از محدودیت فاصله خارج می‌شود.
+			audio_player_3d.max_distance = 1000.0
+
+			maximum_duration = maxf(
+				maximum_duration,
+				audio_player_3d.stream.get_length()
+			)
+
+			audio_player_3d.play()
+			started_component_count += 1
+
+			print(
+				"SAW 3D AUDIO STARTED | ",
+				audio_player_3d.get_path()
+			)
+
+	if started_component_count == 0:
+		holder.queue_free()
+		push_error("Saw VFX: nothing was started.")
+		return
+
+	if maximum_duration <= 0.0:
+		maximum_duration = 2.5
+
+	# زمان اضافه برای تمام‌شدن دنباله ذرات و صدا.
+	await get_tree().create_timer(
+		maximum_duration + 0.75
+	).timeout
+
+	holder.queue_free()
 func _animate_player_vs_dealer(
 	act: BattleAct
 ) -> void:
@@ -1156,6 +1597,32 @@ func _animate_player_vs_dealer(
 	if act.defender == null:
 		return
 
+	# Mustache Rock Sweep:
+	# فقط روی اولین Dealer Act افکت اجرا می‌شود.
+	# هر چهار انیمیشن معمولی مبارزه با Dealer رد می‌شوند.
+	if (
+		act.dealer_attack_type
+		== CardBehavior.DealerAttackType.SWEEP_WIN
+	):
+		if act.is_first_dealer_sweep_act:
+			await _play_mustache_card_sequence(
+				act
+			)
+
+		return
+
+
+	# Chainsaw Sweep:
+	# افکت فقط روی اولین Act پخش می‌شود.
+	# انیمیشن عادی هر چهار حمله به Dealer اجرا نمی‌شود.
+	if (
+		act.dealer_attack_type
+		== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
+	):
+		if act.is_first_dealer_sweep_act:
+			await _play_saw_dirt_vfx()
+
+		return
 	var attacker_view := card_views.get(
 		act.attacker.instance_id,
 		null

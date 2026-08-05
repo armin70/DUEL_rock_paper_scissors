@@ -15,3 +15,6 @@ enum Kind {
 
 
 @onready var card_anchor: Marker3D = $CardAnchor
+
+func _ready() -> void:
+	input_ray_pickable = false

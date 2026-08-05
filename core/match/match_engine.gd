@@ -212,17 +212,16 @@ func play_card(
 			" | slot=",
 			slot_id
 		)
-
-	# حالا Slot خالی است و کارت جدید وارد آن می‌شود.
 	if not CardMover.hand_to_board(
 		player,
 		card,
 		slot_id
 	):
-		push_error(
-			"Card could not enter the Board after Cover."
-		)
 		return false
+
+	# کارت از Hand دوباره وارد Board شده است.
+	# افکت‌های یک‌بارمصرف برای این حضور جدید آماده می‌شوند.
+	card.reset_for_board_entry()
 
 	player.current_mana -= mana_cost
 	card.turn_played = state.turn_number
@@ -247,7 +246,6 @@ func play_card(
 	)
 
 	return true
-
 
 func move_board_card(
 	player_id: int,
@@ -278,17 +276,8 @@ func move_board_card(
 
 	if from_slot_id == to_slot_id:
 		return false
-	if not _can_move_in_row_order(
-		player,
-		from_slot_id,
-		to_slot_id
-	):
-		print(
-			"BOARD MOVE FAILED | front row must "
-			+ "remain full before using back row"
-		)
-		return false
-	# هر Turn فقط یک جابه‌جایی.
+
+	# در هر Turn فقط یک بار امکان جابه‌جایی وجود دارد.
 	if (
 		player.board_move_used_turn
 		== state.turn_number
@@ -304,20 +293,62 @@ func move_board_card(
 		)
 
 	if moving_card == null:
-		return false
-
-	if moving_card.owner_id != player_id:
-		return false
-
-	# مقصد باید کاملاً خالی باشد.
-	if not player.board.is_slot_empty(
-		to_slot_id
-	):
 		print(
-			"BOARD MOVE FAILED | destination occupied"
+			"BOARD MOVE FAILED | source slot is empty"
 		)
 		return false
 
+	if moving_card.owner_id != player_id:
+		print(
+			"BOARD MOVE FAILED | card belongs to another player"
+		)
+		return false
+
+	var replaced_card: CardInstance = \
+		player.board.get_card(to_slot_id)
+
+	# مقصد کارت دارد؛ همان قانون Cover عادی اجرا شود.
+	if replaced_card != null:
+		if moving_card.definition == null:
+			return false
+
+		if replaced_card.definition == null:
+			return false
+
+		var turns_since_played: int = (
+			state.turn_number
+			- replaced_card.turn_played
+		)
+
+		if turns_since_played < 2:
+			print(
+				"BOARD COVER FAILED | target card "
+				+ "must survive one full turn first"
+			)
+			return false
+
+		if not CardGesture.can_cover(
+			moving_card.definition.gesture,
+			replaced_card.definition.gesture
+		):
+			print(
+				"BOARD COVER FAILED | moving card "
+				+ "does not beat destination"
+			)
+			return false
+
+		# دقیقاً مثل Cover عادی:
+		# کارت مقصد از Board خارج و Discard می‌شود.
+		var discarded_card: CardInstance = \
+			CardMover.board_to_discard(
+				player,
+				to_slot_id
+			)
+
+		if discarded_card == null:
+			return false
+
+	# هزینه جابه‌جایی یک Mana است.
 	if (
 		player.current_mana
 		< BOARD_MOVE_MANA_COST
@@ -333,6 +364,9 @@ func move_board_card(
 	)
 
 	if not moved:
+		print(
+			"BOARD MOVE FAILED | BoardState rejected move"
+		)
 		return false
 
 	player.current_mana -= \

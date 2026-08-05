@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://coalc6ycipq2c"
 path.s3tc="res://.godot/imported/JustLand_un perspective battleground.png-60965009b26d40dfa7350b56fe35acc0.s3tc.ctex"
+path.etc2="res://.godot/imported/JustLand_un perspective battleground.png-60965009b26d40dfa7350b56fe35acc0.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://art/board/JustLand_un perspective battleground.png"
-dest_files=["res://.godot/imported/JustLand_un perspective battleground.png-60965009b26d40dfa7350b56fe35acc0.s3tc.ctex"]
+dest_files=["res://.godot/imported/JustLand_un perspective battleground.png-60965009b26d40dfa7350b56fe35acc0.s3tc.ctex", "res://.godot/imported/JustLand_un perspective battleground.png-60965009b26d40dfa7350b56fe35acc0.etc2.ctex"]
 
 [params]
 

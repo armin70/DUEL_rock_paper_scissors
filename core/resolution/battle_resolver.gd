@@ -480,6 +480,7 @@ static func _add_dealer_attacks(
 
 	var target_slots: Array[int] = []
 	target_slots.assign(normal_dealer_slots)
+	
 	# Mustache Rock و Chainsaw در اولین فعال‌شدن
 	# به تمام کارت‌های Dealer حمله می‌کنند.
 	if (
@@ -492,6 +493,16 @@ static func _add_dealer_attacks(
 		target_slots.assign(
 			DealerSlotID.all_slots()
 		)
+	var is_sweep_attack: bool = (
+		attack_type
+		== CardBehavior.DealerAttackType.SWEEP_WIN
+		or
+		attack_type
+		== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
+	)
+
+	var is_first_sweep_act: bool = true
+	var is_first_target: bool = true
 	for dealer_slot_id: int in target_slots:
 		var dealer_card: CardInstance = \
 			_get_dealer_card(
@@ -511,7 +522,23 @@ static func _add_dealer_attacks(
 				dealer_card,
 				dealer_slot_id
 			)
+		act.dealer_attack_type = attack_type
 
+		act.is_first_dealer_sweep_act = (
+			is_sweep_attack
+			and is_first_sweep_act
+		)
+		act.dealer_attack_type = attack_type
+
+		act.is_first_dealer_sweep_act = (
+			is_first_target
+			and attack_type
+			== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
+		)
+		act.dealer_attack_type = attack_type
+
+		act.is_first_dealer_sweep_act = \
+			is_first_target
 		# Mustache Rock تمام Dealerها را قطعی می‌برد.
 		if (
 			attack_type
@@ -538,6 +565,8 @@ static func _add_dealer_attacks(
 			act.attacker_points = \
 				state.rules.win_points
 		sequence.add_act(act)
+		if is_sweep_attack:
+			is_first_sweep_act = false
 
 static func _add_side_lane_sequence(
 	state: MatchState,

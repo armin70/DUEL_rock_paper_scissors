@@ -26,7 +26,10 @@ var defender_owner_id: int = 0
 var attacker_slot_id: int = -1
 var defender_slot_id: int = -1
 var dealer_slot_id: int = -1
+var dealer_attack_type: int = \
+	CardBehavior.DealerAttackType.NORMAL
 
+var is_first_dealer_sweep_act: bool = false
 var attacker_outcome: Outcome = Outcome.TIE
 var defender_outcome: Outcome = Outcome.TIE
 

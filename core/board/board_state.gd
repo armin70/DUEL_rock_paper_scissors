@@ -59,20 +59,6 @@ func remove_card(slot_id: int) -> CardInstance:
 
 	return card
 
-
-func get_occupied_cards() -> Array[CardInstance]:
-	var occupied_cards: Array[CardInstance] = []
-
-	for slot_id: int in SlotID.all_slots():
-		var card: CardInstance = get_card(slot_id)
-
-		if card != null:
-			occupied_cards.append(card)
-
-	return occupied_cards
-
-
-
 func move_card(
 	from_slot_id: int,
 	to_slot_id: int
@@ -86,21 +72,37 @@ func move_card(
 	if from_slot_id == to_slot_id:
 		return false
 
-	var card: CardInstance = get_card(
+	var moving_card: CardInstance = get_card(
 		from_slot_id
 	)
 
-	if card == null:
+	if moving_card == null:
 		return false
 
-	# کارت فقط می‌تواند به Slot خالی منتقل شود.
-	if not is_slot_empty(to_slot_id):
-		return false
+	var destination_card: CardInstance = get_card(
+		to_slot_id
+	)
 
-	slots[from_slot_id] = null
-	slots[to_slot_id] = card
+	# مقصد خالی باشد: Move معمولی
+	# مقصد کارت داشته باشد: دو کارت Switch می‌شوند
+	slots[to_slot_id] = moving_card
+	slots[from_slot_id] = destination_card
 
-	card.zone = CardZone.Type.BOARD
-	card.current_slot = to_slot_id
+	moving_card.zone = CardZone.Type.BOARD
+	moving_card.current_slot = to_slot_id
+
+	if destination_card != null:
+		destination_card.zone = CardZone.Type.BOARD
+		destination_card.current_slot = from_slot_id
 
 	return true
+func get_occupied_cards() -> Array[CardInstance]:
+	var occupied_cards: Array[CardInstance] = []
+
+	for slot_id: int in SlotID.all_slots():
+		var card: CardInstance = get_card(slot_id)
+
+		if card != null:
+			occupied_cards.append(card)
+
+	return occupied_cards

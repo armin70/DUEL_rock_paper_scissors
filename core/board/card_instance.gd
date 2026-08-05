@@ -28,3 +28,14 @@ func is_disabled_in_combat(
 	combat_turn: int
 ) -> bool:
 	return disabled_combat_turn == combat_turn
+
+func reset_for_board_entry() -> void:
+	# افکت‌های یک‌بارمصرف برای ورود جدید به Board آماده می‌شوند.
+	ability_used = false
+
+	# وضعیت‌های موقت Combat قبلی پاک می‌شوند.
+	disabled_combat_turn = -1
+
+	# شیلدهای قبلی نباید بعد از Discard باقی بمانند.
+	shield_count = 0
+	shields_initialized = false

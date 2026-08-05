@@ -106,6 +106,7 @@ func _input_event(
 	_shape_index: int
 ) -> void:
 	if not is_draggable:
+		print("card input false")
 		return
 
 	if event is InputEventMouseButton:
@@ -113,11 +114,22 @@ func _input_event(
 			event.button_index == MOUSE_BUTTON_LEFT
 			and event.pressed
 		):
+			print(
+				"CARD INPUT | draggable=",
+				is_draggable,
+				" | card=",
+				card_instance.definition.display_name
+			)
+
 			drag_requested.emit(self)
+
 func set_disabled(value: bool) -> void:
 	is_disabled = value
-
 	disabled_label.visible = value
+
+	# Disabled بودن فقط نتیجه Combat را تغییر می‌دهد.
+	# نباید Drag یا دریافت Input کارت را خاموش کند.
+	input_ray_pickable = true
 
 
 func set_shield_count(
