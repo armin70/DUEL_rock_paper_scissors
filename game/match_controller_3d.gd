@@ -1296,7 +1296,10 @@ func _start_animated_combat() -> void:
 		interaction_locked = false
 		hud.set_interaction_enabled(true)
 		return
-
+	hud.refresh(
+		state,
+		local_player_id
+	)
 	await _sync_visual_state()
 
 	_refresh_board_disabled_visuals(false)

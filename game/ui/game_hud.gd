@@ -9,7 +9,8 @@ signal end_turn_pressed
 @onready var turn_label: Label = $Root/PlayerInfo/TurnLabel
 @onready var player_score_label: Label = $Root/PlayerInfo/PlayerScoreLabel
 @onready var opponent_score_label: Label = $Root/PlayerInfo/OpponentScoreLabel
-@onready var player_mana_label: Label = $Root/PlayerInfo/PlayerManaLabel
+@onready var player_mana_label: Label = \
+	$Root/PlayerManaPanel/PlayerManaLabel
 @onready var opponent_mana_label: Label = $Root/PlayerInfo/OpponentManaLabel
 @onready var end_turn_button: Button = $Root/EndTurnButton
 
@@ -67,7 +68,7 @@ func refresh(
 		"Opponent Score: %d" % opponent.score
 
 	player_mana_label.text = \
-		"Mana: %d / %d" % [
+		" %d / %d" % [
 			player.current_mana,
 			player.mana_capacity
 		]

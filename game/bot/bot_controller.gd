@@ -6,6 +6,7 @@ const MAX_ACTIONS_PER_TURN: int = 12
 const MIN_COLLECTOR_TARGETS: int = 2
 const BOARD_MOVE_MANA_COST: int = 1
 const INVALID_SCORE: float = -1000000.0
+const HARDCORE_SETTING: StringName = &"gameplay/hardcore_bot"
 
 
 var random := RandomNumberGenerator.new()
@@ -13,6 +14,124 @@ var random := RandomNumberGenerator.new()
 
 func _init() -> void:
 	random.randomize()
+
+
+# حالت پیش‌فرض Fair است. منوی Hardcore فقط همین Setting را True می‌کند.
+func set_hardcore_mode(enabled: bool) -> void:
+	ProjectSettings.set_setting(
+		HARDCORE_SETTING,
+		enabled
+	)
+
+
+func is_hardcore_mode() -> bool:
+	return bool(
+		ProjectSettings.get_setting(
+			HARDCORE_SETTING,
+			false
+		)
+	)
+
+
+# در حالت Fair فقط کارت‌هایی که در Turnهای قبلی قرار گرفته‌اند
+# قابل بررسی‌اند؛ کارت‌های Turn جاری هنوز Face-down هستند.
+func _can_inspect_opponent_card(
+	state: MatchState,
+	card: CardInstance
+) -> bool:
+	if state == null or card == null:
+		return false
+
+	if is_hardcore_mode():
+		return true
+
+	return card.turn_played < state.turn_number
+
+
+func _get_visible_opponent_card(
+	state: MatchState,
+	opponent: PlayerState,
+	slot_id: int
+) -> CardInstance:
+	if state == null or opponent == null:
+		return null
+
+	var card: CardInstance = opponent.board.get_card(
+		slot_id
+	)
+
+	if not _can_inspect_opponent_card(state, card):
+		return null
+
+	return card
+
+
+# نسخه دید ربات از Disable است. در حالت Fair، Disabler مخفیِ
+# بازیکن وارد تصمیم‌گیری ربات نمی‌شود. در Hardcore رفتار قبلی حفظ می‌شود.
+func _is_card_disabled_for_bot_view(
+	state: MatchState,
+	bot: PlayerState,
+	target_owner_id: int,
+	target_slot_id: int,
+	target_card: CardInstance
+) -> bool:
+	if state == null or bot == null:
+		return false
+
+	if target_card == null or target_card.definition == null:
+		return false
+
+	if not SlotID.is_valid(target_slot_id):
+		return false
+
+	var source_owner_id: int = (
+		2 if target_owner_id == 1 else 1
+	)
+
+	var source_player: PlayerState = state.get_player(
+		source_owner_id
+	)
+
+	if source_player == null:
+		return false
+
+	for source_slot_id: int in SlotID.all_slots():
+		var source_card: CardInstance = \
+			source_player.board.get_card(
+				source_slot_id
+			)
+
+		if source_card == null:
+			continue
+
+		# کارت‌های خود ربات همیشه برای خودش معلوم‌اند.
+		# کارت‌های طرف مقابل فقط پس از Reveal بررسی می‌شوند.
+		if source_owner_id != bot.player_id:
+			if not _can_inspect_opponent_card(
+				state,
+				source_card
+			):
+				continue
+
+		if source_card.definition == null:
+			continue
+
+		var behavior := (
+			source_card.definition.behavior
+			as DisableGestureBehavior
+		)
+
+		if behavior == null:
+			continue
+
+		if behavior.disables_target(
+			source_slot_id,
+			target_slot_id,
+			target_card
+		):
+			return true
+
+	return false
 
 
 func play_turn(
@@ -46,6 +165,11 @@ func play_turn(
 		return
 
 	var completed_actions: int = 0
+
+	print(
+		"BOT DIFFICULTY | ",
+		"HARDCORE" if is_hardcore_mode() else "FAIR"
+	)
 
 	# اول کارت Disableشده را واقعاً از خطر خارج می‌کنیم.
 	# ترتیب دفاعی:
@@ -274,7 +398,7 @@ func _is_legal_play_candidate(
 		- replaced_card.turn_played
 	)
 
-	if turns_since_played < 2:
+	if turns_since_played < 1:
 		return false
 
 	return CardGesture.can_cover(
@@ -348,7 +472,9 @@ func _score_against_opponent(
 
 	for target_slot_id: int in target_slots:
 		var target: CardInstance = \
-			opponent.board.get_card(
+			_get_visible_opponent_card(
+				state,
+				opponent,
 				target_slot_id
 			)
 
@@ -372,16 +498,18 @@ func _score_against_opponent(
 			_opposite_outcome(bot_outcome)
 
 		var bot_disabled: bool = \
-			DisableGestureBehavior.is_card_disabled(
+			_is_card_disabled_for_bot_view(
 				state,
+				bot,
 				bot.player_id,
 				slot_id,
 				card
 			)
 
 		var opponent_disabled: bool = \
-			DisableGestureBehavior.is_card_disabled(
+			_is_card_disabled_for_bot_view(
 				state,
+				bot,
 				opponent.player_id,
 				target_slot_id,
 				target
@@ -449,8 +577,9 @@ func _score_against_dealer(
 
 	var score: float = 0.0
 	var bot_disabled: bool = \
-		DisableGestureBehavior.is_card_disabled(
+		_is_card_disabled_for_bot_view(
 			state,
+			bot,
 			bot.player_id,
 			slot_id,
 			card
@@ -475,7 +604,7 @@ func _score_against_dealer(
 		)
 
 		if card.definition.behavior is MustacheRockBehavior:
-			if _count_other_rocks(bot, card) >= 2:
+			if _count_other_rocks_for_view(state, bot, bot, card) >= 2:
 				outcome = BattleAct.Outcome.WIN
 
 		elif card.definition.behavior is ChainsawBehavior:
@@ -555,7 +684,7 @@ func _score_special_behavior(
 
 	if behavior is MustacheRockBehavior:
 		var other_rocks: int = \
-			_count_other_rocks(bot, card)
+			_count_other_rocks_for_view(state, bot, bot, card)
 
 		if other_rocks >= 2:
 			return 30.0
@@ -622,7 +751,9 @@ func _score_disabler_placement(
 
 	for target_slot_id: int in SlotID.all_slots():
 		var target: CardInstance = \
-			opponent.board.get_card(
+			_get_visible_opponent_card(
+				state,
+				opponent,
 				target_slot_id
 			)
 
@@ -639,8 +770,9 @@ func _score_disabler_placement(
 			continue
 
 		# روی کارت از قبل Disableشده دوباره Disabler نریز.
-		if DisableGestureBehavior.is_card_disabled(
+		if _is_card_disabled_for_bot_view(
 			state,
+			bot,
 			opponent.player_id,
 			target_slot_id,
 			target
@@ -768,8 +900,9 @@ func _try_reposition_disabled_card(
 		if moving_card == null or moving_card.definition == null:
 			continue
 
-		if not DisableGestureBehavior.is_card_disabled(
+		if not _is_card_disabled_for_bot_view(
 			state,
+			bot,
 			bot.player_id,
 			from_slot_id,
 			moving_card
@@ -796,8 +929,9 @@ func _try_reposition_disabled_card(
 				continue
 
 			# مقصد باید واقعاً از Disabler حریف امن باشد.
-			if DisableGestureBehavior.is_card_disabled(
+			if _is_card_disabled_for_bot_view(
 				state,
+				bot,
 				bot.player_id,
 				to_slot_id,
 				moving_card
@@ -879,8 +1013,9 @@ func _try_replace_disabled_card(
 		if disabled_card == null or disabled_card.definition == null:
 			continue
 
-		if not DisableGestureBehavior.is_card_disabled(
+		if not _is_card_disabled_for_bot_view(
 			state,
+			bot,
 			bot.player_id,
 			target_slot_id,
 			disabled_card
@@ -900,8 +1035,9 @@ func _try_replace_disabled_card(
 				continue
 
 			# کارت جایگزین نباید در همان Slot دوباره Disable شود.
-			if DisableGestureBehavior.is_card_disabled(
+			if _is_card_disabled_for_bot_view(
 				state,
+				bot,
 				bot.player_id,
 				target_slot_id,
 				hand_card
@@ -979,8 +1115,9 @@ func _try_bomb_disabled_lane(
 		if board_card == null or board_card.definition == null:
 			continue
 
-		if DisableGestureBehavior.is_card_disabled(
+		if _is_card_disabled_for_bot_view(
 			state,
+			bot,
 			bot.player_id,
 			slot_id,
 			board_card
@@ -1032,8 +1169,9 @@ func _try_bomb_disabled_lane(
 					continue
 
 				var is_disabled: bool = \
-					DisableGestureBehavior.is_card_disabled(
+					_is_card_disabled_for_bot_view(
 						state,
+						bot,
 						bot.player_id,
 						lane_slot_id,
 						lane_card
@@ -1091,7 +1229,11 @@ func _is_useful_disabler_placement(
 ) -> bool:
 	for target_slot_id: int in SlotID.all_slots():
 		var target: CardInstance = \
-			opponent.board.get_card(target_slot_id)
+			_get_visible_opponent_card(
+				state,
+				opponent,
+				target_slot_id
+			)
 
 		if target == null or target.definition == null:
 			continue
@@ -1103,8 +1245,9 @@ func _is_useful_disabler_placement(
 		):
 			continue
 
-		if DisableGestureBehavior.is_card_disabled(
+		if _is_card_disabled_for_bot_view(
 			state,
+			bot,
 			opponent.player_id,
 			target_slot_id,
 			target
@@ -1182,7 +1325,7 @@ func _target_has_a_real_win(
 				outcome = BattleAct.Outcome.WIN
 
 		elif target.definition.behavior is MustacheRockBehavior:
-			if _count_other_rocks(opponent, target) >= 2:
+			if _count_other_rocks_for_view(state, bot, opponent, target) >= 2:
 				outcome = BattleAct.Outcome.WIN
 
 		if outcome == BattleAct.Outcome.WIN:
@@ -1240,7 +1383,7 @@ func _is_legal_move_candidate(
 		- replaced.turn_played
 	)
 
-	if turns_since_played < 2:
+	if turns_since_played < 1:
 		return false
 
 	return CardGesture.can_cover(
@@ -1258,8 +1401,9 @@ func _score_existing_card_position(
 ) -> float:
 	var score: float = 0.0
 
-	if DisableGestureBehavior.is_card_disabled(
+	if _is_card_disabled_for_bot_view(
 		state,
+		bot,
 		bot.player_id,
 		slot_id,
 		card
@@ -1293,8 +1437,9 @@ func _card_danger_score(
 ) -> float:
 	var danger: float = 0.0
 
-	if DisableGestureBehavior.is_card_disabled(
+	if _is_card_disabled_for_bot_view(
 		state,
+		bot,
 		bot.player_id,
 		slot_id,
 		card
@@ -1348,18 +1493,27 @@ func _count_collector_targets(
 	return count
 
 
-func _count_other_rocks(
+func _count_other_rocks_for_view(
+	state: MatchState,
 	bot: PlayerState,
+	owner: PlayerState,
 	source_card: CardInstance
 ) -> int:
 	var count: int = 0
 
+	if state == null or bot == null or owner == null:
+		return count
+
 	for slot_id: int in SlotID.all_slots():
 		var card: CardInstance = \
-			bot.board.get_card(slot_id)
+			owner.board.get_card(slot_id)
 
 		if card == null or card == source_card:
 			continue
+
+		if owner.player_id != bot.player_id:
+			if not _can_inspect_opponent_card(state, card):
+				continue
 
 		if card.definition == null:
 			continue
@@ -1443,7 +1597,7 @@ func _get_dealer_target_slots(
 
 	if (
 		behavior is MustacheRockBehavior
-		and _count_other_rocks(bot, card) >= 2
+		and _count_other_rocks_for_view(state, bot, bot, card) >= 2
 	):
 		return DealerSlotID.all_slots()
 

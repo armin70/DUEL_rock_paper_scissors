@@ -160,7 +160,7 @@ func play_card(
 			- replaced_card.turn_played
 		)
 
-		if turns_since_played < 2:
+		if turns_since_played < 1:
 			print(
 				"COVER FAILED | target card must survive "
 				+ "one full turn first"
@@ -330,7 +330,7 @@ func move_board_card(
 			- replaced_card.turn_played
 		)
 
-		if turns_since_played < 2:
+		if turns_since_played < 1:
 			print(
 				"BOARD COVER FAILED | target card "
 				+ "must survive one full turn first"
