@@ -3,6 +3,9 @@ extends Node3D
 @export var saw_vfx_spawn: Node3D
 @export var saw_sound_volume_db: float = 0.0
 const SLOT_COLLISION_MASK: int = 2
+
+
+
 @export_category("Mustache VFX")
 
 @export var MUSTACHE_VFX_SCENE: PackedScene
@@ -33,13 +36,13 @@ var mustache_vfx_lifetime: float = 5.0
 @export_range(1, 2, 1)
 var local_player_id: int = 1
 
-@export var drag_plane_height: float = 0.8
+@export var drag_plane_height: float = 0.25
 
 
 @export_category("Bot and Reveal")
 @export var bot_think_time: float = 0.3
 @export var reveal_step_time: float = 0.3
-@export var reveal_drop_height: float = 1.2
+@export var reveal_drop_height: float = 0.4
 
 
 var engine: MatchEngine
@@ -313,7 +316,7 @@ func _pulse_existing_card(
 
 	var lifted_position: Vector3 = (
 		original_position
-		+ Vector3.UP * 0.35
+		+ Vector3.UP * 0.12
 	)
 
 	var tween: Tween = create_tween()
@@ -339,8 +342,6 @@ func _reveal_bot_card(
 	card: CardInstance,
 	slot_id: int
 ) -> void:
-
-
 	var place: CardPlace3D = \
 		game_layout.get_board_place(
 			bot_player_id,
@@ -429,12 +430,20 @@ func _reveal_bot_card(
 	await tween.finished
 
 	card_view.move_home(
-		target_transform
+	target_transform
 	)
-	_refresh_board_disabled_visuals()
+
+	# اول کارت Revealشده ثبت می‌شود.
 	card_views[
 		card.instance_id
 	] = card_view
+
+	# سپس انیمیشن فعال‌شدن یا برخورد اجرا می‌شود.
+	await _play_card_placement_disable_sequence(
+		card_view
+	)
+
+
 func _find_card_slot(
 	player_id: int,
 	target_card: CardInstance
@@ -475,7 +484,7 @@ func _sync_visual_state() -> void:
 
 	_spawn_hand_cards()
 	_spawn_opponent_hand_cards()
-	_refresh_board_disabled_visuals()
+	_refresh_board_disabled_visuals(false)
 	_refresh_pile_entities()
 func _spawn_dealer_cards() -> void:
 	for slot_id: int in DealerSlotID.all_slots():
@@ -758,20 +767,21 @@ func _finish_card_drag(
 				card,
 				place.logical_id
 			)
+
 		if not was_played:
 			card_view.return_home()
 			return
-		
-		# هنگام برنامه‌ریزی فقط تغییرات بازیکن خودمان
-		# اجازه دارند در تصویر نمایش داده شوند.
+
+		# View کارت‌های Coverشده یا منتقل‌شده به pile پاک می‌شود.
 		_remove_pile_card_views(
 			local_player_id
 		)
+		_remove_discarded_card_views()
+
 		_spawn_missing_local_hand_cards()
-
 		_refresh_pile_entities()
-		_refresh_board_disabled_visuals()
 
+		# این کارت فقط یک بار برای Reveal ثبت می‌شود.
 		pending_local_cards.append(
 			card
 		)
@@ -781,28 +791,8 @@ func _finish_card_drag(
 		card_view.move_home(
 			place.card_anchor.global_transform
 		)
-
-		hud.refresh(
-			state,
-			local_player_id
-		)
-
-		await _refresh_hand_positions()
-		if not was_played:
-			card_view.return_home()
-			return
-
-		# برای سیستم Cover که قبلاً اضافه کردیم.
-		_remove_discarded_card_views()
-		_refresh_pile_entities()
-
-		pending_local_cards.append(card)
-
-		# کارت حالا روی Board است و می‌تواند Drag شود.
-		card_view.is_draggable = true
-
-		card_view.move_home(
-			place.card_anchor.global_transform
+		await _play_card_placement_disable_sequence(
+			card_view
 		)
 
 		hud.refresh(
@@ -842,8 +832,7 @@ func _finish_card_drag(
 		card_view.move_home(
 			place.card_anchor.global_transform
 		)
-
-		_refresh_board_disabled_visuals()
+		_refresh_board_disabled_visuals(true)
 
 		hud.refresh(
 			state,
@@ -851,7 +840,9 @@ func _finish_card_drag(
 		)
 
 		return
+
 	card_view.return_home()
+
 func _get_place_under_mouse(
 	screen_position: Vector2
 ) -> CardPlace3D:
@@ -1032,12 +1023,16 @@ func _refresh_opponent_hand_positions() -> void:
 			target_transform
 		)
 
-func _refresh_board_disabled_visuals() -> void:
+func _refresh_board_disabled_visuals(
+	animate_changes: bool = true
+) -> float:
 	if engine == null:
-		return
+		return 0.0
 
 	if engine.state == null:
-		return
+		return 0.0
+
+	var longest_hit_duration: float = 0.0
 
 	for player_id: int in [1, 2]:
 		var player: PlayerState = \
@@ -1066,14 +1061,90 @@ func _refresh_board_disabled_visuals() -> void:
 				continue
 
 			var disabled: bool = \
-				DisableGestureBehavior.is_card_disabled(
-					engine.state,
+				_is_card_visually_disabled(
 					player_id,
 					slot_id,
 					card
 				)
 
-			card_view.set_disabled(disabled)
+			var hit_duration: float = \
+				card_view.set_disabled(
+					disabled,
+					animate_changes
+				)
+
+			longest_hit_duration = maxf(
+				longest_hit_duration,
+				hit_duration
+			)
+
+	return longest_hit_duration
+
+func _is_card_visually_disabled(
+	target_owner_id: int,
+	target_slot_id: int,
+	target_card: CardInstance
+) -> bool:
+	if state == null:
+		return false
+
+	if target_card == null:
+		return false
+
+	# Disabler باید متعلق به طرف مقابل باشد.
+	var source_owner_id: int = (
+		2 if target_owner_id == 1 else 1
+	)
+
+	var source_player: PlayerState = \
+		state.get_player(
+			source_owner_id
+		)
+
+	if source_player == null:
+		return false
+
+	for source_slot_id: int in SlotID.all_slots():
+		var source_card: CardInstance = \
+			source_player.board.get_card(
+				source_slot_id
+			)
+
+		if source_card == null:
+			continue
+
+		if source_card.definition == null:
+			continue
+
+		var behavior := (
+			source_card.definition.behavior
+			as DisableGestureBehavior
+		)
+
+		if behavior == null:
+			continue
+
+		# اگر View کارت Disabler وجود ندارد،
+		# یعنی هنوز برای بازیکن Reveal نشده است.
+		var source_view := card_views.get(
+			source_card.instance_id,
+			null
+		) as Card3D
+
+		if source_view == null:
+			continue
+
+		if not source_view.visible:
+			continue
+
+		if behavior.disables_target(
+			source_slot_id,
+			target_slot_id,
+			target_card
+		):
+			return true
+
+	return false
 
 func _start_animated_combat() -> void:
 	interaction_locked = true
@@ -1091,7 +1162,7 @@ func _start_animated_combat() -> void:
 	# مهم: صبر می‌کنیم Viewهای جدید کامل ساخته شوند.
 	await _sync_visual_state()
 
-	_refresh_board_disabled_visuals()
+	_refresh_board_disabled_visuals(false)
 	_refresh_battle_scores()
 	if state.phase == MatchPhase.Type.GAME_OVER:
 		_finish_game()
@@ -1100,29 +1171,12 @@ func _start_animated_combat() -> void:
 		"ANIMATED COMBAT STARTED | acts=",
 		sequence.acts.size()
 	)
-	var mustache_vfx_played: bool = false
-	var saw_vfx_played: bool = false
 	while sequence.has_next():
 		var act: BattleAct = sequence.get_next()
 
 		if act == null:
 			continue
-		if act.type == BattleAct.Type.PLAYER_VS_DEALER:
-			if (
-				act.dealer_attack_type
-				== CardBehavior.DealerAttackType.SWEEP_WIN
-				and not mustache_vfx_played
-			):
-				mustache_vfx_played = true
-				await _play_mustache_vfx()
 
-			elif (
-				act.dealer_attack_type
-				== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
-				and not saw_vfx_played
-			):
-				saw_vfx_played = true
-				await _play_saw_dirt_vfx()
 		print(
 			"ANIMATING ACT | type=",
 			act.type,
@@ -1154,7 +1208,7 @@ func _start_animated_combat() -> void:
 	await _sync_visual_state()
 
 	_refresh_battle_scores()
-	_refresh_board_disabled_visuals()
+	_refresh_board_disabled_visuals(false)
 
 	interaction_locked = false
 	hud.set_interaction_enabled(true)
@@ -1177,6 +1231,13 @@ func _animate_battle_act(
 				act
 			)
 
+		BattleAct.Type.MUSTACHE_SWEEP:
+			await _play_mustache_card_sequence(
+				act
+			)
+
+		BattleAct.Type.CHAINSAW_SWEEP:
+			await _play_saw_dirt_vfx()
 func _play_mustache_card_sequence(
 	act: BattleAct
 ) -> void:
@@ -1204,29 +1265,38 @@ func _play_mustache_card_sequence(
 		start_positions.append(
 			mustache_view.global_position
 		)
+	# بازیکنی که سنگ سیبیل متعلق به اوست.
+	var owner: PlayerState = state.get_player(
+		act.attacker_owner_id
+	)
 
-	# تمام کارت‌های ROCK دیلر
-	for dealer_slot_id: int in DealerSlotID.all_slots():
-		var dealer_card: CardInstance = \
-			state.dealer.slots.get(
-				dealer_slot_id,
-				null
-			) as CardInstance
+	if owner == null:
+		await _play_mustache_vfx()
+		return
 
-		if dealer_card == null:
+	# تمام کارت‌های ROCK همان بازیکن روی Board
+	for slot_id: int in SlotID.all_slots():
+		var rock_card: CardInstance = \
+			owner.board.get_card(slot_id)
+
+		if rock_card == null:
 			continue
 
-		if dealer_card.definition == null:
+		# سنگ سیبیل قبلاً به لیست اضافه شده است.
+		if rock_card == act.attacker:
+			continue
+
+		if rock_card.definition == null:
 			continue
 
 		if (
-			dealer_card.definition.gesture
+			rock_card.definition.gesture
 			!= CardGesture.Type.ROCK
 		):
 			continue
 
 		var rock_view := card_views.get(
-			dealer_card.instance_id,
+			rock_card.instance_id,
 			null
 		) as Card3D
 
@@ -1597,32 +1667,8 @@ func _animate_player_vs_dealer(
 	if act.defender == null:
 		return
 
-	# Mustache Rock Sweep:
-	# فقط روی اولین Dealer Act افکت اجرا می‌شود.
-	# هر چهار انیمیشن معمولی مبارزه با Dealer رد می‌شوند.
-	if (
-		act.dealer_attack_type
-		== CardBehavior.DealerAttackType.SWEEP_WIN
-	):
-		if act.is_first_dealer_sweep_act:
-			await _play_mustache_card_sequence(
-				act
-			)
-
-		return
 
 
-	# Chainsaw Sweep:
-	# افکت فقط روی اولین Act پخش می‌شود.
-	# انیمیشن عادی هر چهار حمله به Dealer اجرا نمی‌شود.
-	if (
-		act.dealer_attack_type
-		== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
-	):
-		if act.is_first_dealer_sweep_act:
-			await _play_saw_dirt_vfx()
-
-		return
 	var attacker_view := card_views.get(
 		act.attacker.instance_id,
 		null
@@ -1664,7 +1710,7 @@ func _animate_player_vs_dealer(
 		0.15
 	)
 
-	hit_position.y += 0.45
+	hit_position.y += 0.15
 
 	var attack_tween: Tween = create_tween()
 
@@ -1746,7 +1792,7 @@ func _animate_player_clash(
 		first_start + second_start
 	) * 0.5
 
-	clash_center.y += 1.25
+	clash_center.y += 0.35
 
 	var direction: Vector3 = \
 		second_start - first_start
@@ -1757,10 +1803,10 @@ func _animate_player_clash(
 		direction = direction.normalized()
 
 	var first_target: Vector3 = \
-		clash_center - direction * 0.22
+		clash_center - direction * 0.08
 
 	var second_target: Vector3 = \
-		clash_center + direction * 0.22
+		clash_center + direction * 0.08
 
 	var clash_tween: Tween = create_tween()
 	clash_tween.set_parallel(true)
@@ -2141,3 +2187,31 @@ func _find_board_card_by_instance_id(
 				return card
 
 	return null
+
+func _play_card_placement_disable_sequence(
+	card_view: Card3D
+) -> void:
+	if card_view == null:
+		return
+
+	# ابتدا فقط انیمیشن خود Disabler.
+	var activate_duration: float = \
+		card_view.play_on_placed_effect()
+
+	# صبر تا پایان کامل انیمیشن Disabler.
+	if activate_duration > 0.0:
+		await get_tree().create_timer(
+			activate_duration
+		).timeout
+
+	# بعد از پایان Disabler، انیمیشن Targetها شروع می‌شود.
+	var hit_duration: float = \
+		_refresh_board_disabled_visuals(
+			true
+		)
+
+	# صبر تا انیمیشن Targetها کامل تمام شود.
+	if hit_duration > 0.0:
+		await get_tree().create_timer(
+			hit_duration
+		).timeout

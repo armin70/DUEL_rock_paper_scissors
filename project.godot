@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Rock_Paper_Scissors_Duel"
-run/main_scene="uid://06iqmu2u82b3"
+run/main_scene="uid://bamqb8n1q3iqt"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
 

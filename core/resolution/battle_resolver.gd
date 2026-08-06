@@ -461,7 +461,7 @@ static func _add_dealer_attacks(
 	if player_card == null:
 		return
 
-	var attack_type: CardBehavior.DealerAttackType = \
+	var attack_type: int = \
 		CardBehavior.DealerAttackType.NORMAL
 
 	if (
@@ -478,31 +478,112 @@ static func _add_dealer_attacks(
 			)
 		)
 
-	var target_slots: Array[int] = []
-	target_slots.assign(normal_dealer_slots)
-	
-	# Mustache Rock و Chainsaw در اولین فعال‌شدن
-	# به تمام کارت‌های Dealer حمله می‌کنند.
+	# سنگ سیبیل دیگر چهار حمله جداگانه نمی‌سازد.
+	# یک Act مخصوص می‌سازد و امتیاز تمام Dealerها را یک‌جا می‌دهد.
 	if (
 		attack_type
 		== CardBehavior.DealerAttackType.SWEEP_WIN
-		or attack_type
+	):
+		var dealer_card_count: int = 0
+
+		for dealer_slot_id: int in \
+			DealerSlotID.all_slots():
+
+			var dealer_card: CardInstance = \
+				_get_dealer_card(
+					state,
+					dealer_slot_id
+				)
+
+			if dealer_card != null:
+				dealer_card_count += 1
+
+		var mustache_act := BattleAct.new()
+
+		mustache_act.type = \
+			BattleAct.Type.MUSTACHE_SWEEP
+
+		mustache_act.attacker = player_card
+		mustache_act.attacker_owner_id = player_id
+		mustache_act.attacker_slot_id = player_slot_id
+
+		mustache_act.dealer_attack_type = \
+			CardBehavior.DealerAttackType.SWEEP_WIN
+
+		mustache_act.attacker_outcome = \
+			BattleAct.Outcome.WIN
+
+		mustache_act.attacker_points = (
+			state.rules.win_points
+			* dealer_card_count
+		)
+
+		sequence.add_act(mustache_act)
+		return
+
+# اره‌برقی دیگر برای هر کارت Dealer یک Act جدا نمی‌سازد.
+# فقط یک Act می‌سازد و امتیاز کارت‌های غیر ROCK را یک‌جا می‌دهد.
+	if (
+		attack_type
 		== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
 	):
-		target_slots.clear()
-		target_slots.assign(
-			DealerSlotID.all_slots()
-		)
-	var is_sweep_attack: bool = (
-		attack_type
-		== CardBehavior.DealerAttackType.SWEEP_WIN
-		or
-		attack_type
-		== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
-	)
+		var defeated_dealer_count: int = 0
 
-	var is_first_sweep_act: bool = true
-	var is_first_target: bool = true
+		for dealer_slot_id: int in DealerSlotID.all_slots():
+			var dealer_card: CardInstance = \
+				_get_dealer_card(
+					state,
+					dealer_slot_id
+				)
+
+			if dealer_card == null:
+				continue
+
+			if dealer_card.definition == null:
+				continue
+
+			# اره‌برقی کارت ROCK را نمی‌برد.
+			if (
+				dealer_card.definition.gesture
+				== CardGesture.Type.ROCK
+			):
+				continue
+
+			defeated_dealer_count += 1
+
+		var chainsaw_act := BattleAct.new()
+
+		chainsaw_act.type = \
+			BattleAct.Type.CHAINSAW_SWEEP
+
+		chainsaw_act.attacker = player_card
+		chainsaw_act.attacker_owner_id = player_id
+		chainsaw_act.attacker_slot_id = player_slot_id
+
+		chainsaw_act.dealer_attack_type = \
+			CardBehavior.DealerAttackType.CHAINSAW_SWEEP
+
+		if defeated_dealer_count > 0:
+			chainsaw_act.attacker_outcome = \
+				BattleAct.Outcome.WIN
+		else:
+			chainsaw_act.attacker_outcome = \
+				BattleAct.Outcome.LOSS
+
+		chainsaw_act.attacker_points = (
+			state.rules.win_points
+			* defeated_dealer_count
+		)
+
+		sequence.add_act(chainsaw_act)
+		return
+
+	# حمله معمولی یا Chainsaw
+	var target_slots: Array[int] = []
+	target_slots.assign(normal_dealer_slots)
+
+
+
 	for dealer_slot_id: int in target_slots:
 		var dealer_card: CardInstance = \
 			_get_dealer_card(
@@ -523,50 +604,9 @@ static func _add_dealer_attacks(
 				dealer_slot_id
 			)
 		act.dealer_attack_type = attack_type
-
-		act.is_first_dealer_sweep_act = (
-			is_sweep_attack
-			and is_first_sweep_act
-		)
-		act.dealer_attack_type = attack_type
-
-		act.is_first_dealer_sweep_act = (
-			is_first_target
-			and attack_type
-			== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
-		)
-		act.dealer_attack_type = attack_type
-
-		act.is_first_dealer_sweep_act = \
-			is_first_target
-		# Mustache Rock تمام Dealerها را قطعی می‌برد.
-		if (
-			attack_type
-			== CardBehavior.DealerAttackType.SWEEP_WIN
-		):
-			act.attacker_outcome = \
-				BattleAct.Outcome.WIN
-
-			act.attacker_points = \
-				state.rules.win_points
-
-
-		# Chainsaw تمام Dealerها به‌جز ROCK را قطعی می‌برد.
-		elif (
-			attack_type
-			== CardBehavior.DealerAttackType.CHAINSAW_SWEEP
-			and dealer_card.definition != null
-			and dealer_card.definition.gesture
-			!= CardGesture.Type.ROCK
-		):
-			act.attacker_outcome = \
-				BattleAct.Outcome.WIN
-
-			act.attacker_points = \
-				state.rules.win_points
 		sequence.add_act(act)
-		if is_sweep_attack:
-			is_first_sweep_act = false
+
+
 
 static func _add_side_lane_sequence(
 	state: MatchState,

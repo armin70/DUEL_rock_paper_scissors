@@ -4,7 +4,9 @@ extends RefCounted
 
 enum Type {
 	PLAYER_VS_DEALER,
-	PLAYER_VS_PLAYER
+	PLAYER_VS_PLAYER,
+	MUSTACHE_SWEEP,
+	CHAINSAW_SWEEP
 }
 
 

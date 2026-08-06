@@ -111,29 +111,21 @@ tracks/4/keys = {
 "points": PackedFloat32Array(0, -0.25, 0, 0.25, 0, 0.5568628, -0.04, -0.09281047, 0, 0),
 "times": PackedFloat32Array(0, 0.24)
 }
-tracks/5/type = "method"
+tracks/5/type = "audio"
 tracks/5/imported = false
 tracks/5/enabled = true
 tracks/5/path = NodePath("AudioStreamPlayer3D")
 tracks/5/interp = 1
 tracks/5/loop_wrap = true
 tracks/5/keys = {
-"times": PackedFloat32Array(),
-"transitions": PackedFloat32Array(),
-"values": []
+"clips": [{
+"end_offset": 0.0,
+"start_offset": 0.0,
+"stream": ExtResource("1_r5vfe")
+}],
+"times": PackedFloat32Array(0.16666663)
 }
-tracks/6/type = "value"
-tracks/6/imported = false
-tracks/6/enabled = true
-tracks/6/path = NodePath("AudioStreamPlayer3D:playing")
-tracks/6/interp = 1
-tracks/6/loop_wrap = true
-tracks/6/keys = {
-"times": PackedFloat32Array(0, 0.03333334, 0.16666667),
-"transitions": PackedFloat32Array(1, 1, 1),
-"update": 1,
-"values": [false, true, true]
-}
+tracks/5/use_blend = true
 
 [sub_resource type="Animation" id="Animation_lm02y"]
 length = 2.621
@@ -149,29 +141,12 @@ tracks/0/keys = {
 "update": 1,
 "values": [false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false]
 }
-tracks/1/type = "audio"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("AudioStreamPlayer3D")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"clips": [{
-"end_offset": 0.0,
-"start_offset": 0.0,
-"stream": ExtResource("1_r5vfe")
-}],
-"times": PackedFloat32Array(0)
-}
-tracks/1/use_blend = true
 
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_lm02y"]
 _data = {
 &"Fight": SubResource("Animation_2xavq"),
 &"RESET": SubResource("Animation_lm02y")
 }
-
-[sub_resource type="AudioStreamPolyphonic" id="AudioStreamPolyphonic_7epln"]
 
 [node name="Sibil_Fight" type="GPUParticles3D" unique_id=1813516043]
 transform = Transform3D(2.4800649, 0, 0, 0, 0.20938538, 0, 0, 0, 0.35004973, 0, 0, 0)
@@ -186,4 +161,3 @@ draw_pass_1 = SubResource("SphereMesh_e1f7d")
 libraries/ = SubResource("AnimationLibrary_lm02y")
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="." unique_id=129307742]
-stream = SubResource("AudioStreamPolyphonic_7epln")
