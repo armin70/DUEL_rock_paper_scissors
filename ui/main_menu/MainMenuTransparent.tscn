@@ -1,16 +1,18 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://bp0rt6eijxbi1"]
 
-[ext_resource type="Script" path="res://ui/main_menu/main_menu_transparent.gd" id="1_script"]
-[ext_resource type="VideoStream" path="res://ui/main_menu/idle_color.ogv" id="2_idle_color"]
-[ext_resource type="VideoStream" path="res://ui/main_menu/idle_alpha.ogv" id="3_idle_alpha"]
-[ext_resource type="VideoStream" path="res://ui/main_menu/start_color.ogv" id="4_start_color"]
-[ext_resource type="VideoStream" path="res://ui/main_menu/start_alpha.ogv" id="5_start_alpha"]
-[ext_resource type="Shader" path="res://ui/main_menu/transparent_video_composite.gdshader" id="6_shader"]
+[ext_resource type="Script" uid="uid://bl02o8p44ghe1" path="res://ui/main_menu/main_menu_transparent.gd" id="1_script"]
+[ext_resource type="VideoStream" uid="uid://brg13y2qlpu" path="res://ui/main_menu/idle_color.ogv" id="2_idle_color"]
+[ext_resource type="VideoStream" uid="uid://dxbrecxrnh8cb" path="res://ui/main_menu/idle_alpha.ogv" id="3_idle_alpha"]
+[ext_resource type="VideoStream" uid="uid://v65fckurxiwq" path="res://ui/main_menu/start_color.ogv" id="4_start_color"]
+[ext_resource type="VideoStream" uid="uid://caljy6mbsnfmw" path="res://ui/main_menu/start_alpha.ogv" id="5_start_alpha"]
+[ext_resource type="Shader" uid="uid://ci80kcdjfymhl" path="res://ui/main_menu/transparent_video_composite.gdshader" id="6_shader"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_video"]
 shader = ExtResource("6_shader")
+shader_parameter/alpha_gamma = 1.0
+shader_parameter/alpha_multiplier = 1.0
 
-[node name="MainMenu" type="CanvasLayer"]
+[node name="MainMenu" type="CanvasLayer" unique_id=223478386]
 layer = 100
 script = ExtResource("1_script")
 idle_color_video = ExtResource("2_idle_color")
@@ -18,16 +20,15 @@ idle_alpha_video = ExtResource("3_idle_alpha")
 start_color_video = ExtResource("4_start_color")
 start_alpha_video = ExtResource("5_start_alpha")
 
-[node name="MenuRoot" type="Control" parent="."]
+[node name="MenuRoot" type="Control" parent="." unique_id=603608421]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 0
 
-[node name="ColorPlayer" type="VideoStreamPlayer" parent="MenuRoot"]
+[node name="ColorPlayer" type="VideoStreamPlayer" parent="MenuRoot" unique_id=1519694019]
 modulate = Color(1, 1, 1, 0)
 layout_mode = 1
 anchors_preset = 15
@@ -38,7 +39,7 @@ grow_vertical = 2
 mouse_filter = 2
 expand = true
 
-[node name="AlphaPlayer" type="VideoStreamPlayer" parent="MenuRoot"]
+[node name="AlphaPlayer" type="VideoStreamPlayer" parent="MenuRoot" unique_id=1422120179]
 modulate = Color(1, 1, 1, 0)
 layout_mode = 1
 anchors_preset = 15
@@ -49,19 +50,19 @@ grow_vertical = 2
 mouse_filter = 2
 expand = true
 
-[node name="Composite" type="ColorRect" parent="MenuRoot"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
+[node name="Composite" type="ColorRect" parent="MenuRoot" unique_id=694134931]
 material = SubResource("ShaderMaterial_video")
-color = Color(1, 1, 1, 1)
-
-[node name="StartButton" type="Button" parent="MenuRoot"]
 layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="StartButton" type="Button" parent="MenuRoot" unique_id=224905515]
+layout_mode = 1
+anchors_preset = -1
 anchor_left = 0.325
 anchor_top = 0.215
 anchor_right = 0.535
@@ -72,8 +73,7 @@ focus_mode = 0
 mouse_default_cursor_shape = 2
 flat = true
 
-[node name="ModeButtons" type="Control" parent="MenuRoot"]
-visible = false
+[node name="ModeButtons" type="Control" parent="MenuRoot" unique_id=1576282734]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -82,20 +82,26 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 1
 
-[node name="SinglePlayerButton" type="Button" parent="MenuRoot/ModeButtons"]
+[node name="SinglePlayerButton" type="Button" parent="MenuRoot/ModeButtons" unique_id=500330700]
 layout_mode = 1
+anchors_preset = -1
 anchor_left = 0.285
 anchor_top = 0.32
 anchor_right = 0.43
 anchor_bottom = 0.47
+offset_left = 112.79999
+offset_top = 82.399994
+offset_right = 112.79999
+offset_bottom = 82.399994
 grow_horizontal = 2
 grow_vertical = 2
 focus_mode = 0
 mouse_default_cursor_shape = 2
 flat = true
 
-[node name="TwoPlayerButton" type="Button" parent="MenuRoot/ModeButtons"]
+[node name="TwoPlayerButton" type="Button" parent="MenuRoot/ModeButtons" unique_id=1237865564]
 layout_mode = 1
+anchors_preset = -1
 anchor_left = 0.43
 anchor_top = 0.32
 anchor_right = 0.555
@@ -106,16 +112,20 @@ focus_mode = 0
 mouse_default_cursor_shape = 2
 flat = true
 
-[node name="HardcoreButton" type="Button" parent="MenuRoot/ModeButtons"]
+[node name="HardcoreButton" type="Button" parent="MenuRoot/ModeButtons" unique_id=1332456719]
 modulate = Color(1, 1, 1, 0)
 layout_mode = 1
-anchor_left = 0.90
+anchors_preset = -1
+anchor_left = 0.9
 anchor_top = 0.86
 anchor_right = 0.985
 anchor_bottom = 0.985
+offset_left = -212.0
+offset_top = -2.7999878
+offset_right = 24.799927
+offset_bottom = 12.199951
 grow_horizontal = 2
 grow_vertical = 2
 focus_mode = 0
 mouse_default_cursor_shape = 2
 flat = true
-
