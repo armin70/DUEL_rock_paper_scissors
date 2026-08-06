@@ -6,6 +6,8 @@ const SLOT_COLLISION_MASK: int = 2
 
 
 
+@export_range(0.0, 1.0, 0.01)
+var collector_pull_delay: float = 0.20
 @export_category("Mustache VFX")
 
 @export var MUSTACHE_VFX_SCENE: PackedScene
@@ -44,10 +46,15 @@ var local_player_id: int = 1
 @export var reveal_step_time: float = 0.3
 @export var reveal_drop_height: float = 0.4
 
-
+const MAX_KEPT_HAND_CARDS: int = 3
+const MAX_HAND_CARDS: int = 6
+const TAP_DRAG_THRESHOLD: float = 18.0
 var engine: MatchEngine
 var state: MatchState
+var kept_hand_card_ids: Dictionary = {}
 
+var pointer_start_position: Vector2 = Vector2.ZERO
+var pointer_has_dragged: bool = false
 var bot_controller: BotController = BotController.new()
 var bot_player_id: int = 2
 
@@ -88,7 +95,6 @@ func _ready() -> void:
 	)
 
 	# ربات هم‌زمان با بازیکن، مخفیانه برنامه‌ریزی می‌کند.
-	_prepare_bot_turn()
 	_refresh_balance_scale()
 	
 	print("Simultaneous match started.")
@@ -100,8 +106,9 @@ func _prepare_bot_turn() -> void:
 	if state.phase != MatchPhase.Type.MAIN:
 		return
 
-	var bot: PlayerState = \
-		state.get_player(bot_player_id)
+	var bot: PlayerState = state.get_player(
+		bot_player_id
+	)
 
 	if bot == null:
 		return
@@ -111,23 +118,18 @@ func _prepare_bot_turn() -> void:
 
 	pending_bot_plays.clear()
 
-	# رکوردهای قبلی Bot پاک می‌شوند.
 	engine.clear_play_records(
 		bot_player_id
 	)
 
-	# Bot فقط داخل Engine برنامه‌ریزی می‌کند.
-	# هیچ Viewای در این مرحله تغییر نمی‌کند.
 	bot_controller.play_turn(
 		engine,
 		bot_player_id
 	)
 
-	# ترتیب واقعی Playهای Bot را نگه می‌داریم.
-	pending_bot_plays = \
-		engine.consume_play_records(
-			bot_player_id
-		)
+	pending_bot_plays = engine.consume_play_records(
+		bot_player_id
+	)
 
 	engine.set_player_ready(
 		bot_player_id
@@ -138,6 +140,7 @@ func _prepare_bot_turn() -> void:
 		pending_bot_plays.size(),
 		" plays."
 	)
+
 func _get_board_card_ids(
 	player_id: int
 ) -> Dictionary:
@@ -204,6 +207,10 @@ func _on_end_turn_pressed() -> void:
 
 	if player.is_ready:
 		return
+
+	# Bot now plans after the player locks the turn, so it can
+	# react to the player cards that were placed this turn.
+	_prepare_bot_turn()
 
 	var success: bool = engine.set_player_ready(
 		local_player_id
@@ -342,16 +349,13 @@ func _reveal_bot_card(
 	card: CardInstance,
 	slot_id: int
 ) -> void:
-	var place: CardPlace3D = \
-		game_layout.get_board_place(
-			bot_player_id,
-			slot_id
-		)
+	var place: CardPlace3D = game_layout.get_board_place(
+		bot_player_id,
+		slot_id
+	)
 
 	if place == null:
-		push_error(
-			"Missing opponent board place."
-		)
+		push_error("Missing opponent board place.")
 		return
 
 	var target_transform: Transform3D = \
@@ -362,7 +366,6 @@ func _reveal_bot_card(
 		null
 	) as Card3D
 
-	# حالت اضطراری، در صورتی که View دست پیدا نشد.
 	if card_view == null:
 		var start_transform: Transform3D = \
 			target_transform
@@ -430,19 +433,19 @@ func _reveal_bot_card(
 	await tween.finished
 
 	card_view.move_home(
-	target_transform
+		target_transform
 	)
 
-	# اول کارت Revealشده ثبت می‌شود.
 	card_views[
 		card.instance_id
 	] = card_view
 
-	# سپس انیمیشن فعال‌شدن یا برخورد اجرا می‌شود.
+	card_view.play_killer_placed_effect()
+	card_view.play_bomb_placed_effect()
+
 	await _play_card_placement_disable_sequence(
 		card_view
 	)
-
 
 func _find_card_slot(
 	player_id: int,
@@ -486,6 +489,52 @@ func _sync_visual_state() -> void:
 	_spawn_opponent_hand_cards()
 	_refresh_board_disabled_visuals(false)
 	_refresh_pile_entities()
+	_restore_local_board_dragging()
+
+
+func _restore_local_board_dragging() -> void:
+	if state == null:
+		return
+
+	var player: PlayerState = state.get_player(
+		local_player_id
+	)
+
+	if player == null:
+		return
+
+	var drag_callable := Callable(
+		self,
+		"_start_card_drag"
+	)
+
+	for slot_id: int in SlotID.all_slots():
+		var card: CardInstance = player.board.get_card(
+			slot_id
+		)
+
+		if card == null:
+			continue
+
+		var card_view := card_views.get(
+			card.instance_id,
+			null
+		) as Card3D
+
+		if card_view == null:
+			continue
+
+		card_view.is_draggable = true
+		card_view.input_ray_pickable = true
+
+		if not card_view.drag_requested.is_connected(
+			drag_callable
+		):
+			card_view.drag_requested.connect(
+				drag_callable
+			)
+
+
 func _spawn_dealer_cards() -> void:
 	for slot_id: int in DealerSlotID.all_slots():
 		var card: CardInstance = state.dealer.slots.get(
@@ -563,6 +612,8 @@ func _spawn_board_cards(
 					"_start_card_drag"
 				)
 			)
+
+
 func _spawn_hand_cards() -> void:
 	var player: PlayerState = state.get_player(
 		local_player_id
@@ -587,8 +638,20 @@ func _spawn_hand_cards() -> void:
 			true
 		)
 
+		if card_view == null:
+			continue
+
+		card_view.set_keep_selected(
+			kept_hand_card_ids.has(
+				card.instance_id
+			)
+		)
+
 		card_view.drag_requested.connect(
-			Callable(self, "_start_card_drag")
+			Callable(
+				self,
+				"_start_card_drag"
+			)
 		)
 
 func _create_card_view(
@@ -622,8 +685,12 @@ func _create_card_view(
 	return card_view
 
 func _start_card_drag(
-	card_view: Card3D
+	card_view: Card3D,
+	screen_position: Vector2
 ) -> void:
+	if dragged_card != null:
+		return
+
 	if interaction_locked:
 		return
 
@@ -661,32 +728,116 @@ func _start_card_drag(
 	):
 		return
 
-	print(
-		"DRAG STARTED | card=",
-		card.definition.display_name,
-		" | zone=",
-		CardZone.Type.keys()[card.zone]
-	)
-
 	dragged_card = card_view
+	pointer_start_position = screen_position
+	pointer_has_dragged = false
+
 func _input(event: InputEvent) -> void:
 	if dragged_card == null:
 		return
 
-	if event is InputEventMouseMotion:
-		_move_dragged_card(
+	if event is InputEventScreenDrag:
+		_update_pointer_drag(
 			event.position
 		)
 
-	elif event is InputEventMouseButton:
-		if (
-			event.button_index
-			== MOUSE_BUTTON_LEFT
-			and not event.pressed
-		):
-			_finish_card_drag(
+	elif event is InputEventMouseMotion:
+		_update_pointer_drag(
+			event.position
+		)
+
+	elif event is InputEventScreenTouch:
+		if not event.pressed:
+			_finish_pointer_interaction(
 				event.position
 			)
+
+	elif event is InputEventMouseButton:
+		if (
+			event.button_index == MOUSE_BUTTON_LEFT
+			and not event.pressed
+		):
+			_finish_pointer_interaction(
+				event.position
+			)
+
+func _update_pointer_drag(
+	screen_position: Vector2
+) -> void:
+	if not pointer_has_dragged:
+		var drag_distance: float = \
+			screen_position.distance_to(
+				pointer_start_position
+			)
+
+		if drag_distance < TAP_DRAG_THRESHOLD:
+			return
+
+		pointer_has_dragged = true
+
+	_move_dragged_card(
+		screen_position
+	)
+
+
+func _finish_pointer_interaction(
+	screen_position: Vector2
+) -> void:
+	if dragged_card == null:
+		return
+
+	if not pointer_has_dragged:
+		var tapped_card: Card3D = dragged_card
+		dragged_card = null
+
+		_toggle_keep_card(
+			tapped_card
+		)
+		return
+
+	_finish_card_drag(
+		screen_position
+	)
+
+func _toggle_keep_card(
+	card_view: Card3D
+) -> void:
+	if card_view == null:
+		return
+
+	var card: CardInstance = \
+		card_view.card_instance
+
+	if card == null:
+		return
+
+	if card.owner_id != local_player_id:
+		return
+
+	if card.zone != CardZone.Type.HAND:
+		return
+
+	if kept_hand_card_ids.has(
+		card.instance_id
+	):
+		kept_hand_card_ids.erase(
+			card.instance_id
+		)
+
+		card_view.set_keep_selected(false)
+		return
+
+	if (
+		kept_hand_card_ids.size()
+		>= MAX_KEPT_HAND_CARDS
+	):
+		return
+
+	kept_hand_card_ids[
+		card.instance_id
+	] = true
+
+	card_view.set_keep_selected(true)
 
 
 func _move_dragged_card(
@@ -727,19 +878,15 @@ func _finish_card_drag(
 	if card_view == null:
 		return
 
-	var place: CardPlace3D = \
-		_get_place_under_mouse(
-			screen_position
-		)
+	var place: CardPlace3D = _get_place_under_mouse(
+		screen_position
+	)
 
 	if place == null:
 		card_view.return_home()
 		return
 
-	if (
-		place.kind
-		!= CardPlace3D.Kind.PLAYER_BOARD
-	):
+	if place.kind != CardPlace3D.Kind.PLAYER_BOARD:
 		card_view.return_home()
 		return
 
@@ -747,50 +894,49 @@ func _finish_card_drag(
 		card_view.return_home()
 		return
 
-	var card: CardInstance = \
-		card_view.card_instance
+	var card: CardInstance = card_view.card_instance
 
 	if card == null:
 		card_view.return_home()
 		return
 
-	var original_zone: CardZone.Type = \
-		card.zone
+	var original_zone: CardZone.Type = card.zone
 
-	# -----------------------------------------
-	# کارت از Hand وارد Board می‌شود.
-	# -----------------------------------------
 	if original_zone == CardZone.Type.HAND:
-		var was_played: bool = \
-			engine.play_card(
-				local_player_id,
-				card,
-				place.logical_id
-			)
+		var was_played: bool = engine.play_card(
+			local_player_id,
+			card,
+			place.logical_id
+		)
 
 		if not was_played:
 			card_view.return_home()
 			return
 
-		# View کارت‌های Coverشده یا منتقل‌شده به pile پاک می‌شود.
+		kept_hand_card_ids.erase(
+			card.instance_id
+		)
+		card_view.set_keep_selected(false)
+
 		_remove_pile_card_views(
 			local_player_id
 		)
 		_remove_discarded_card_views()
-
 		_spawn_missing_local_hand_cards()
 		_refresh_pile_entities()
 
-		# این کارت فقط یک بار برای Reveal ثبت می‌شود.
 		pending_local_cards.append(
 			card
 		)
 
 		card_view.is_draggable = true
-
 		card_view.move_home(
 			place.card_anchor.global_transform
 		)
+
+		card_view.play_killer_placed_effect()
+		card_view.play_bomb_placed_effect()
+
 		await _play_card_placement_disable_sequence(
 			card_view
 		)
@@ -803,9 +949,6 @@ func _finish_card_drag(
 		await _refresh_hand_positions()
 		return
 
-	# -----------------------------------------
-	# کارت موجود روی Board جابه‌جا می‌شود.
-	# -----------------------------------------
 	if original_zone == CardZone.Type.BOARD:
 		var from_slot_id: int = card.current_slot
 		var to_slot_id: int = place.logical_id
@@ -820,15 +963,11 @@ func _finish_card_drag(
 			card_view.return_home()
 			return
 
-		# کارت Coverشده چون وارد Discard شده،
-		# همان لحظه View آن پاک می‌شود.
 		_remove_pile_card_views(
 			local_player_id
 		)
-
 		_refresh_pile_entities()
 
-		# کارت درگ‌شده همان لحظه جای مقصد می‌نشیند.
 		card_view.move_home(
 			place.card_anchor.global_transform
 		)
@@ -838,7 +977,6 @@ func _finish_card_drag(
 			state,
 			local_player_id
 		)
-
 		return
 
 	card_view.return_home()
@@ -1149,62 +1287,58 @@ func _is_card_visually_disabled(
 func _start_animated_combat() -> void:
 	interaction_locked = true
 
+	await _play_collector_vfx_before_combat()
+
 	var sequence: BattleSequence = engine.begin_combat()
-	if state.phase == MatchPhase.Type.GAME_OVER:
-		_finish_game()
-		return
+
 	if sequence == null:
 		push_error("Could not begin battle sequence.")
 		interaction_locked = false
 		hud.set_interaction_enabled(true)
 		return
 
-	# مهم: صبر می‌کنیم Viewهای جدید کامل ساخته شوند.
 	await _sync_visual_state()
 
 	_refresh_board_disabled_visuals(false)
 	_refresh_battle_scores()
-	if state.phase == MatchPhase.Type.GAME_OVER:
-		_finish_game()
-		return
+
 	print(
 		"ANIMATED COMBAT STARTED | acts=",
 		sequence.acts.size()
 	)
+
 	while sequence.has_next():
 		var act: BattleAct = sequence.get_next()
 
 		if act == null:
 			continue
 
-		print(
-			"ANIMATING ACT | type=",
-			act.type,
-			" | attacker=",
-			act.attacker.definition.display_name
-		)
-
 		await _animate_battle_act(act)
-
 		engine.apply_battle_act(act)
 		_refresh_board_shield_visuals()
 		_refresh_battle_scores()
-
-		# به‌محض رسیدن اختلاف امتیاز به حد برد،
-		# ادامه Combat متوقف می‌شود.
-		if state.phase == MatchPhase.Type.GAME_OVER:
-			_finish_game()
-			return
 
 		await get_tree().create_timer(
 			0.25
 		).timeout
 	if state.phase == MatchPhase.Type.GAME_OVER:
+		_refresh_battle_scores()
 		_finish_game()
 		return
+
+	var retained_cards: Array[CardInstance] = \
+		_take_selected_cards_from_local_hand()
+
 	engine.finish_combat()
 
-	# اینجا هم باید await داشته باشد.
+	_restore_retained_cards_to_local_hand(
+		retained_cards
+	)
+
+	_return_excess_local_hand_cards_to_draw_pile()
+
+	kept_hand_card_ids.clear()
+
 	await _sync_visual_state()
 
 	_refresh_battle_scores()
@@ -1213,7 +1347,86 @@ func _start_animated_combat() -> void:
 	interaction_locked = false
 	hud.set_interaction_enabled(true)
 
-	_prepare_bot_turn()
+
+
+func _take_selected_cards_from_local_hand() -> Array[CardInstance]:
+	var retained_cards: Array[CardInstance] = []
+
+	if state == null:
+		return retained_cards
+
+	var player: PlayerState = state.get_player(
+		local_player_id
+	)
+
+	if player == null:
+		return retained_cards
+
+	for index: int in range(
+		player.hand.size() - 1,
+		-1,
+		-1
+	):
+		var card: CardInstance = player.hand[index]
+
+		if card == null:
+			continue
+
+		if not kept_hand_card_ids.has(
+			card.instance_id
+		):
+			continue
+
+		player.hand.remove_at(index)
+		retained_cards.push_front(card)
+
+	return retained_cards
+
+
+func _restore_retained_cards_to_local_hand(
+	retained_cards: Array[CardInstance]
+) -> void:
+	if state == null:
+		return
+
+	var player: PlayerState = state.get_player(
+		local_player_id
+	)
+
+	if player == null:
+		return
+
+	for index: int in range(retained_cards.size()):
+		var card: CardInstance = retained_cards[index]
+
+		if card == null:
+			continue
+
+		card.zone = CardZone.Type.HAND
+		player.hand.insert(index, card)
+
+
+func _return_excess_local_hand_cards_to_draw_pile() -> void:
+	if state == null:
+		return
+
+	var player: PlayerState = state.get_player(
+		local_player_id
+	)
+
+	if player == null:
+		return
+
+	while player.hand.size() > MAX_HAND_CARDS:
+		var card: CardInstance = player.hand.pop_back()
+
+		if card == null:
+			continue
+
+		card.zone = CardZone.Type.DRAW
+		card.current_slot = CardInstance.NO_SLOT
+		player.draw_pile.append(card)
+
 func _animate_battle_act(
 	act: BattleAct
 ) -> void:
@@ -1235,9 +1448,13 @@ func _animate_battle_act(
 			await _play_mustache_card_sequence(
 				act
 			)
-
 		BattleAct.Type.CHAINSAW_SWEEP:
-			await _play_saw_dirt_vfx()
+			if $"../SawVFXSpawn/AnimationPlayer" == null:
+				print("animation is null")
+			else:
+				$"../SawVFXSpawn/AnimationPlayer".play("move")
+
+
 func _play_mustache_card_sequence(
 	act: BattleAct
 ) -> void:
@@ -1973,6 +2190,8 @@ func _remove_pile_card_views(
 
 		card_views.erase(raw_id)
 		card_view.queue_free()
+
+
 func _spawn_missing_local_hand_cards() -> void:
 	var player: PlayerState = state.get_player(
 		local_player_id
@@ -2007,7 +2226,11 @@ func _spawn_missing_local_hand_cards() -> void:
 
 		if card_view == null:
 			continue
-
+		card_view.set_keep_selected(
+			kept_hand_card_ids.has(
+				card.instance_id
+			)
+		)
 		card_view.drag_requested.connect(
 			Callable(
 				self,
@@ -2215,3 +2438,189 @@ func _play_card_placement_disable_sequence(
 		await get_tree().create_timer(
 			hit_duration
 		).timeout
+
+
+func _play_collector_vfx_before_combat() -> void:
+	if state == null:
+		return
+
+	var claimed_target_ids: Dictionary = {}
+
+	for collector_owner_id: int in [1, 2]:
+		var collector_owner: PlayerState = \
+			state.get_player(collector_owner_id)
+
+		if collector_owner == null:
+			continue
+
+		for collector_slot_id: int in SlotID.all_slots():
+			var collector_card: CardInstance = \
+				collector_owner.board.get_card(
+					collector_slot_id
+				)
+
+			if collector_card == null:
+				continue
+
+			if collector_card.definition == null:
+				continue
+
+			var collector_behavior := (
+				collector_card.definition.behavior
+				as CollectorBehavior
+			)
+
+			if collector_behavior == null:
+				continue
+
+			# Collector فقط یک بار استفاده می‌شود.
+			if collector_card.ability_used:
+				continue
+
+			var collector_view := card_views.get(
+				collector_card.instance_id,
+				null
+			) as Card3D
+
+			if collector_view == null:
+				continue
+
+			var target_views: Array[Card3D] = []
+
+			# Collector فقط Board صاحب خودش را بررسی می‌کند.
+			for target_owner_id: int in [1, 2]:
+				if target_owner_id != collector_owner_id:
+					continue
+
+				var target_owner: PlayerState = \
+					state.get_player(target_owner_id)
+
+				if target_owner == null:
+					continue
+
+				for target_slot_id: int in SlotID.all_slots():
+					var target_card: CardInstance = \
+						target_owner.board.get_card(
+							target_slot_id
+						)
+
+					if target_card == null:
+						continue
+
+					if target_card.definition == null:
+						continue
+
+					# خود Collector جمع نمی‌شود.
+					if target_card == collector_card:
+						continue
+
+					# کارت‌های همین Turn جمع نمی‌شوند.
+					if (
+						target_card.turn_played
+						>= state.turn_number
+					):
+						continue
+
+					# فقط Gesture مربوط به همین Collector.
+					if (
+						target_card.definition.gesture
+						!= collector_behavior.collected_gesture
+					):
+						continue
+
+					# یک کارت توسط دو Collector انتخاب نشود.
+					if claimed_target_ids.has(
+						target_card.instance_id
+					):
+						continue
+
+					var target_view := card_views.get(
+						target_card.instance_id,
+						null
+					) as Card3D
+
+					if target_view == null:
+						continue
+
+					claimed_target_ids[
+						target_card.instance_id
+					] = true
+
+					target_views.append(target_view)
+
+			print(
+				"COLLECTOR START | card=",
+				collector_card.definition.display_name,
+				" | targets=",
+				target_views.size()
+			)
+
+			# افکت Collector همین حالا شروع می‌شود.
+			var effect_duration: float = \
+				collector_view.play_collector_effect()
+
+			# کمی بعد همه کارت‌ها باهم حرکت می‌کنند.
+			var pull_delay: float = 0.20
+			var pull_duration: float = 0.55
+			var elapsed_time: float = 0.0
+
+			if not target_views.is_empty():
+				if pull_delay > 0.0:
+					await get_tree().create_timer(
+						pull_delay
+					).timeout
+
+					elapsed_time += pull_delay
+
+				var pull_tween: Tween = create_tween()
+
+				pull_tween.set_parallel(true)
+
+				pull_tween.set_trans(
+					Tween.TRANS_QUAD
+				)
+
+				pull_tween.set_ease(
+					Tween.EASE_IN
+				)
+
+				for target_view: Card3D in target_views:
+					if target_view == null:
+						continue
+
+
+					# همه کارت‌ها هم‌زمان به Collector می‌روند.
+					pull_tween.tween_property(
+						target_view,
+						"global_position",
+						collector_view.global_position,
+						pull_duration
+					)
+
+					# همه کارت‌ها هم‌زمان کوچک می‌شوند.
+					pull_tween.tween_property(
+						target_view,
+						"scale",
+						Vector3.ZERO,
+						pull_duration
+					)
+
+				await pull_tween.finished
+
+				elapsed_time += pull_duration
+
+				# حذف واقعی بعداً توسط begin_combat انجام می‌شود.
+				for target_view: Card3D in target_views:
+					if is_instance_valid(target_view):
+						target_view.visible = false
+
+			# اگر انیمیشن Collector هنوز تمام نشده، صبر می‌کنیم.
+			var remaining_effect_time: float = (
+				effect_duration
+				- elapsed_time
+			)
+
+			if remaining_effect_time > 0.0:
+				await get_tree().create_timer(
+					remaining_effect_time
+				).timeout

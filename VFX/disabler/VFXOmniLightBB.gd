@@ -1,6 +1,5 @@
 @tool
 extends OmniLight3D
-class_name VFXOmniLightBB
 
 @export var light_mult : float = 1.0:
 	set(v):

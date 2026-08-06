@@ -3,9 +3,9 @@ extends Node3D
 
 
 @export_category("Hand Layout")
-@export var hand_spacing: float = .3
-@export var hand_angle_degrees: float = 6.0
-@export var hand_arc_depth: float = 0.05
+@export var hand_spacing: float = .25
+@export var hand_angle_degrees: float = 10.0
+@export var hand_arc_depth: float = 0.03
 
 
 @onready var player_hand_origin: Node3D = $PlayerHand

@@ -10,7 +10,7 @@ shading_mode = 0
 albedo_color = Color(0.63529414, 1, 1, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_gc5er"]
-size = Vector3(0.32, 0.04, 0.449)
+size = Vector3(0.32, 0.02, 0.449)
 
 [node name="card_place_3d" type="Area3D" unique_id=1644330271]
 collision_layer = 2

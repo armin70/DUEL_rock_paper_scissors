@@ -5,7 +5,6 @@ const BOARD_MOVE_MANA_COST: int = 1
 var state: MatchState
 var card_factory: CardFactory = CardFactory.new()
 var active_battle_sequence: BattleSequence
-var covered_card: CardInstance = null
 var play_records_by_player: Dictionary = {
 	1: [],
 	2: []
@@ -140,6 +139,11 @@ func play_card(
 		)
 		return false
 
+	var mana_cost: int = card.definition.mana_cost
+
+	if player.current_mana < mana_cost:
+		return false
+
 	var replaced_card: CardInstance = \
 		player.board.get_card(slot_id)
 	var board_before: Dictionary = \
@@ -181,11 +185,6 @@ func play_card(
 			)
 			return false
 
-	var mana_cost: int = card.definition.mana_cost
-
-	if player.current_mana < mana_cost:
-		return false
-
 	# اگر Slot اشغال بود، ابتدا کارت قدیمی Discard می‌شود.
 	if replaced_card != null:
 		var discarded_card: CardInstance = \
@@ -193,11 +192,6 @@ func play_card(
 				player,
 				slot_id
 			)
-		if covered_card == null:
-			push_error(
-				"Cover failed: old card could not be removed."
-			)
-			return false
 		if discarded_card == null:
 			push_error(
 				"Cover failed: old card could not be discarded."
@@ -232,7 +226,7 @@ func play_card(
 			card,
 			player_id,
 			slot_id,
-			covered_card
+			replaced_card
 		)
 
 		card.definition.behavior.on_played_to_board(
@@ -292,6 +286,22 @@ func move_board_card(
 			from_slot_id
 		)
 
+	if not _can_move_in_row_order(
+		player,
+		from_slot_id,
+		to_slot_id
+	):
+		print(
+			"BOARD MOVE FAILED | invalid row order"
+		)
+		return false
+
+	if player.current_mana < BOARD_MOVE_MANA_COST:
+		print(
+			"BOARD MOVE FAILED | not enough mana"
+		)
+		return false
+
 	if moving_card == null:
 		print(
 			"BOARD MOVE FAILED | source slot is empty"
@@ -347,16 +357,6 @@ func move_board_card(
 
 		if discarded_card == null:
 			return false
-
-	# هزینه جابه‌جایی یک Mana است.
-	if (
-		player.current_mana
-		< BOARD_MOVE_MANA_COST
-	):
-		print(
-			"BOARD MOVE FAILED | not enough mana"
-		)
-		return false
 
 	var moved: bool = player.board.move_card(
 		from_slot_id,

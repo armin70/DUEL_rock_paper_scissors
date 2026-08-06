@@ -5,7 +5,9 @@ extends CardBehavior
 @export var collected_gesture: CardGesture.Type = \
 	CardGesture.Type.ROCK
 
-@export var points_per_discarded_card: int = 1
+@export_range(0, 100, 1)
+var points_per_card: int = 1
+
 
 func on_start_combat(
 	context: CardBehaviorContext
@@ -16,28 +18,40 @@ func on_start_combat(
 	if context.state == null:
 		return
 
-	var source_card: CardInstance = context.source_card
+	var source_card: CardInstance = \
+		context.source_card
 
 	if source_card == null:
 		return
 
-	# Collector فقط یک‌بار فعال می‌شود.
+	if source_card.definition == null:
+		return
+
+	# این Collector قبلاً در همین حضور روی Board استفاده شده است.
 	if source_card.ability_used:
 		return
 
-	var owner: PlayerState = context.get_owner()
+	# Collector فقط یک بار فعال می‌شود؛ حتی اگر Target نداشته باشد.
+	source_card.ability_used = true
+
+	# فقط Board صاحب خود Collector بررسی می‌شود.
+	var owner: PlayerState = \
+		context.state.get_player(
+			context.owner_id
+		)
 
 	if owner == null:
 		return
 
-	source_card.ability_used = true
-
-	# اول Slot کارت‌های قابل جمع‌شدن را ذخیره می‌کنیم.
-	var target_slots: Array[int] = []
+	# ابتدا Slotها را ذخیره می‌کنیم تا هنگام Discard کردن،
+	# تغییر Board باعث خراب‌شدن Loop نشود.
+	var target_slot_ids: Array[int] = []
 
 	for slot_id: int in SlotID.all_slots():
 		var target_card: CardInstance = \
-			owner.board.get_card(slot_id)
+			owner.board.get_card(
+				slot_id
+			)
 
 		if target_card == null:
 			continue
@@ -45,11 +59,11 @@ func on_start_combat(
 		if target_card.definition == null:
 			continue
 
-		# Collector خودش را جمع نمی‌کند.
+		# خود Collector جمع نمی‌شود.
 		if target_card == source_card:
 			continue
 
-		# کارت بازی‌شده در همین Turn جمع نمی‌شود.
+		# کارت‌های چیده‌شده در همین Turn جمع نمی‌شوند.
 		if (
 			target_card.turn_played
 			>= context.state.turn_number
@@ -62,44 +76,34 @@ func on_start_combat(
 		):
 			continue
 
-		target_slots.append(slot_id)
+		target_slot_ids.append(slot_id)
 
 	var discarded_count: int = 0
 
-	# بعد از پایان Search، کارت‌ها را Discard می‌کنیم.
-	for target_slot_id: int in target_slots:
+	for target_slot_id: int in target_slot_ids:
 		var discarded_card: CardInstance = \
 			CardMover.board_to_discard(
 				owner,
 				target_slot_id
 			)
 
-		if discarded_card == null:
-			continue
-
-		discarded_count += 1
-
-		print(
-			"COLLECTOR DISCARDED | owner=",
-			context.owner_id,
-			" | card=",
-			discarded_card.definition.display_name,
-			" | slot=",
-			target_slot_id
-		)
+		if discarded_card != null:
+			discarded_count += 1
 
 	var gained_points: int = (
 		discarded_count
-		* points_per_discarded_card
+		* points_per_card
 	)
 
 	owner.score += gained_points
 
 	print(
-		"COLLECTOR FINISHED | owner=",
+		"COLLECTOR RESOLVED | owner=",
 		context.owner_id,
+		" | card=",
+		source_card.definition.display_name,
 		" | discarded=",
 		discarded_count,
-		" | gained_points=",
+		" | points=",
 		gained_points
 	)

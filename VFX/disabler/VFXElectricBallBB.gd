@@ -36,10 +36,10 @@ var light : VFXOmniLightBB:
 @export_group("Light")
 
 ## Color of the emitted light of this effect
-@export var light_color : Color:
-	set(v):
-		light_color = v
-		if light: light.light_color = light_color
+#@export var light_color : Color:
+	#set(v):
+		#light_color = v
+		#if light: light.light_color = light_color
 
 ## Energy of the emitted light of this effect
 @export var light_energy : float = 5.0:
