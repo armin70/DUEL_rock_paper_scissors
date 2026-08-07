@@ -9,6 +9,7 @@ size = Vector3(0.32, 0.02, 0.449)
 script = ExtResource("1_2aryl")
 
 [node name="StackMesh" type="MeshInstance3D" parent="." unique_id=1362363865]
+visible = false
 mesh = SubResource("BoxMesh_jmxk3")
 
 [node name="CardAnchor" type="Marker3D" parent="." unique_id=1624864197]
@@ -16,12 +17,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
 
 [node name="PileNameLabel" type="Label3D" parent="." unique_id=1279434495]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05750379, -0.05931893)
+visible = false
 billboard = 1
 text = "fds"
 font_size = 10
 
 [node name="CountLabel" type="Label3D" parent="." unique_id=993696427]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.031761453, -0.19995475)
+visible = false
 billboard = 1
 text = "0"
 font_size = 10

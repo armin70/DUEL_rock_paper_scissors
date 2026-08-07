@@ -13,7 +13,12 @@ config_version=5
 config/name="Rock_Paper_Scissors_Duel"
 run/main_scene="uid://bamqb8n1q3iqt"
 config/features=PackedStringArray("4.6", "Mobile")
-config/icon="res://icon.svg"
+boot_splash/image="uid://brlgd7a6cc3s5"
+config/icon="uid://ci4yringcijm"
+
+[autoload]
+
+MusicManager="*uid://cdoe50rvfsbil"
 
 [display]
 

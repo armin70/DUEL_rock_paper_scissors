@@ -24,6 +24,30 @@ var mustache_vfx_lifetime: float = 5.0
 @export var player_two_deck: DeckDefinition
 @export var dealer_deck: DeckDefinition
 
+@export_category("Player Deck Choice")
+@export var player_one_deck_2: DeckDefinition
+@export var player_one_deck_3: DeckDefinition
+
+# Optional. When empty, the first card inside each deck is used as its cover.
+@export var deck_one_preview_card: CardDefinition
+@export var deck_two_preview_card: CardDefinition
+@export var deck_three_preview_card: CardDefinition
+
+@export_range(1.0, 6.0, 0.1)
+var deck_choice_distance: float = 2.6
+
+@export_range(0.4, 2.0, 0.05)
+var deck_choice_spacing: float = 0.90
+
+@export_range(0.5, 4.0, 0.1)
+var deck_choice_scale: float = 2.2
+
+@export_range(-2.0, 2.0, 0.05)
+var deck_choice_vertical_offset: float = 0.0
+
+@export_range(0.05, 1.0, 0.05)
+var deck_choice_animation_time: float = 0.30
+
 
 @export_category("Scene References")
 @export var game_layout: GameLayout3D
@@ -67,15 +91,267 @@ var dragged_card: Card3D
 var pending_local_cards: Array[CardInstance] = []
 var pending_bot_plays: Array[CardPlayRecord] = []
 
+var deck_selection_active: bool = false
+var deck_choice_cards: Array[Card3D] = []
+
 
 func _ready() -> void:
+	# The transparent menu finds this controller through the group.
+	add_to_group(&"match_controller")
+
 	if not _resources_are_valid():
 		return
 
 	bot_player_id = 2 if local_player_id == 1 else 1
 
-	engine = MatchEngine.new()
+	# Do not build MatchState yet. The player must choose a deck first.
+	interaction_locked = true
+	hud.visible = false
+	hud.set_interaction_enabled(false)
 
+	hud.end_turn_pressed.connect(
+		Callable(self, "_on_end_turn_pressed")
+	)
+
+	print("Waiting for player deck selection.")
+
+
+# Called by main_menu_transparent.gd after Single Player or Hardcore.
+func begin_deck_selection() -> void:
+	if deck_selection_active:
+		return
+
+	if state != null:
+		return
+
+	deck_selection_active = true
+	interaction_locked = true
+	hud.visible = false
+	hud.set_interaction_enabled(false)
+
+	call_deferred("_spawn_deck_choice_cards")
+
+
+func _spawn_deck_choice_cards() -> void:
+	_clear_deck_choice_cards()
+
+	var decks: Array[DeckDefinition] = [
+		player_one_deck,
+		player_one_deck_2,
+		player_one_deck_3
+	]
+
+	var preview_overrides: Array[CardDefinition] = [
+		deck_one_preview_card,
+		deck_two_preview_card,
+		deck_three_preview_card
+	]
+
+	for index: int in range(decks.size()):
+		var selected_deck: DeckDefinition = decks[index]
+		var preview_definition: CardDefinition = \
+			_get_deck_preview_definition(
+				selected_deck,
+				preview_overrides[index]
+			)
+
+		if preview_definition == null:
+			push_error(
+				"Deck %d has no preview card." % (index + 1)
+			)
+			continue
+
+		var card_view := card_scene.instantiate() as Card3D
+
+		if card_view == null:
+			push_error("Card scene root must be Card3D.")
+			continue
+
+		runtime_cards.add_child(card_view)
+
+		var preview_instance := CardInstance.new(
+			-1000 - index,
+			preview_definition,
+			local_player_id
+		)
+
+		var target_transform: Transform3D = \
+			_get_deck_choice_transform(index)
+
+		card_view.setup(
+			preview_instance,
+			target_transform,
+			false,
+			true
+		)
+
+		card_view.drag_requested.connect(
+			Callable(
+				self,
+				"_on_deck_choice_selected"
+			).bind(selected_deck)
+		)
+
+		deck_choice_cards.append(card_view)
+
+	# Small entrance animation.
+	for index: int in range(deck_choice_cards.size()):
+		var card_view: Card3D = deck_choice_cards[index]
+		var target_scale: Vector3 = card_view.scale
+		card_view.scale = target_scale * 0.02
+
+		var tween: Tween = create_tween()
+		tween.set_trans(Tween.TRANS_BACK)
+		tween.set_ease(Tween.EASE_OUT)
+		tween.tween_property(
+			card_view,
+			"scale",
+			target_scale,
+			deck_choice_animation_time
+		)
+
+		await get_tree().create_timer(0.07).timeout
+
+	for card_view: Card3D in deck_choice_cards:
+		card_view.is_draggable = true
+
+	print("Choose one of the three deck cards.")
+
+
+func _get_deck_preview_definition(
+	deck: DeckDefinition,
+	override_definition: CardDefinition
+) -> CardDefinition:
+	if override_definition != null:
+		return override_definition
+
+	if deck == null:
+		return null
+
+	for entry: DeckEntry in deck.entries:
+		if entry == null:
+			continue
+
+		if entry.card != null:
+			return entry.card
+
+	return null
+
+
+func _get_deck_choice_transform(
+	index: int
+) -> Transform3D:
+	var camera_transform: Transform3D = camera_3d.global_transform
+
+	var camera_right: Vector3 = \
+		camera_transform.basis.x.normalized()
+	var camera_up: Vector3 = \
+		camera_transform.basis.y.normalized()
+	var camera_forward: Vector3 = \
+		-camera_transform.basis.z.normalized()
+
+	var horizontal_offset: float = \
+		(float(index) - 1.0) * deck_choice_spacing
+
+	var target_position: Vector3 = (
+		camera_transform.origin
+		+ camera_forward * deck_choice_distance
+		+ camera_right * horizontal_offset
+		+ camera_up * deck_choice_vertical_offset
+	)
+
+	# Card3D's front normal is its local +Y axis.
+	# Point +Y back toward the camera and keep the card upright.
+	var facing_basis := Basis(
+		camera_right,
+		-camera_forward,
+		-camera_up
+	)
+
+	facing_basis = facing_basis.scaled(
+		Vector3.ONE * deck_choice_scale
+	)
+
+	return Transform3D(
+		facing_basis,
+		target_position
+	)
+
+
+func _on_deck_choice_selected(
+	selected_card_view: Card3D,
+	selected_deck: DeckDefinition
+) -> void:
+	if not deck_selection_active:
+		return
+
+	if selected_card_view == null:
+		return
+
+	if selected_deck == null:
+		return
+
+	deck_selection_active = false
+
+	for card_view: Card3D in deck_choice_cards:
+		card_view.is_draggable = false
+
+	var selection_tween: Tween = create_tween()
+	selection_tween.set_parallel(true)
+	selection_tween.set_trans(Tween.TRANS_BACK)
+	selection_tween.set_ease(Tween.EASE_IN_OUT)
+
+	for card_view: Card3D in deck_choice_cards:
+		if card_view == selected_card_view:
+			var toward_camera: Vector3 = (
+				camera_3d.global_position
+				- card_view.global_position
+			).normalized()
+
+			selection_tween.tween_property(
+				card_view,
+				"global_position",
+				card_view.global_position + toward_camera * 0.35,
+				deck_choice_animation_time
+			)
+			selection_tween.tween_property(
+				card_view,
+				"scale",
+				card_view.scale * 1.15,
+				deck_choice_animation_time
+			)
+		else:
+			selection_tween.tween_property(
+				card_view,
+				"scale",
+				Vector3.ZERO,
+				deck_choice_animation_time
+			)
+
+	await selection_tween.finished
+
+	_clear_deck_choice_cards()
+	await get_tree().process_frame
+
+	await _start_match_with_selected_deck(
+		selected_deck
+	)
+
+
+func _clear_deck_choice_cards() -> void:
+	for card_view: Card3D in deck_choice_cards:
+		if is_instance_valid(card_view):
+			card_view.queue_free()
+
+	deck_choice_cards.clear()
+
+
+func _start_match_with_selected_deck(
+	selected_deck: DeckDefinition
+) -> void:
+	player_one_deck = selected_deck
+
+	engine = MatchEngine.new()
 	state = engine.start_match(
 		rules,
 		player_one_deck,
@@ -83,21 +359,20 @@ func _ready() -> void:
 		dealer_deck
 	)
 
-	hud.end_turn_pressed.connect(
-		Callable(self, "_on_end_turn_pressed")
-	)
-
 	await _sync_visual_state()
 
+	hud.visible = true
 	hud.refresh(
 		state,
 		local_player_id
 	)
+	hud.set_interaction_enabled(true)
 
-	# ربات هم‌زمان با بازیکن، مخفیانه برنامه‌ریزی می‌کند.
+	interaction_locked = false
 	_refresh_balance_scale()
-	
-	print("Simultaneous match started.")
+
+	print("Match started with selected player deck.")
+
 
 func _prepare_bot_turn() -> void:
 	if state == null:
@@ -733,6 +1008,28 @@ func _start_card_drag(
 	pointer_has_dragged = false
 
 func _input(event: InputEvent) -> void:
+	# Deck selection is handled directly by screen position.
+	# This does not depend on Card3D's collider or drag signal.
+	if deck_selection_active:
+		if event is InputEventMouseButton:
+			if (
+				event.button_index == MOUSE_BUTTON_LEFT
+				and event.pressed
+			):
+				_try_select_deck_at_screen_position(
+					event.position
+				)
+				get_viewport().set_input_as_handled()
+
+		elif event is InputEventScreenTouch:
+			if event.pressed:
+				_try_select_deck_at_screen_position(
+					event.position
+				)
+				get_viewport().set_input_as_handled()
+
+		return
+
 	if dragged_card == null:
 		return
 
@@ -760,6 +1057,91 @@ func _input(event: InputEvent) -> void:
 			_finish_pointer_interaction(
 				event.position
 			)
+
+func _try_select_deck_at_screen_position(
+	screen_position: Vector2
+) -> void:
+	if not deck_selection_active:
+		return
+
+	if camera_3d == null:
+		return
+
+	if deck_choice_cards.is_empty():
+		return
+
+	var closest_index: int = -1
+	var closest_distance: float = INF
+
+	for index: int in range(deck_choice_cards.size()):
+		var card_view: Card3D = deck_choice_cards[index]
+
+		if not is_instance_valid(card_view):
+			continue
+
+		if camera_3d.is_position_behind(
+			card_view.global_position
+		):
+			continue
+
+		var card_screen_position: Vector2 = \
+			camera_3d.unproject_position(
+				card_view.global_position
+			)
+
+		var distance: float = \
+			card_screen_position.distance_to(
+				screen_position
+			)
+
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_index = index
+
+	if closest_index < 0:
+		return
+
+	var viewport_height: float = \
+		get_viewport().get_visible_rect().size.y
+
+	var selection_radius: float = clampf(
+		viewport_height * 0.24,
+		120.0,
+		320.0
+	)
+
+	if closest_distance > selection_radius:
+		return
+
+	var decks: Array[DeckDefinition] = [
+		player_one_deck,
+		player_one_deck_2,
+		player_one_deck_3
+	]
+
+	if closest_index >= decks.size():
+		return
+
+	var selected_deck: DeckDefinition = \
+		decks[closest_index]
+
+	if selected_deck == null:
+		push_error(
+			"Selected deck %d is missing."
+			% (closest_index + 1)
+		)
+		return
+
+	print(
+		"DECK CHOICE CLICK | deck=",
+		closest_index + 1
+	)
+
+	_on_deck_choice_selected(
+		deck_choice_cards[closest_index],
+		selected_deck
+	)
+
 
 func _update_pointer_drag(
 	screen_position: Vector2
@@ -1058,6 +1440,14 @@ func _resources_are_valid() -> bool:
 		push_error("Player one deck is missing.")
 		return false
 
+	if player_one_deck_2 == null:
+		push_error("Player deck choice 2 is missing.")
+		return false
+
+	if player_one_deck_3 == null:
+		push_error("Player deck choice 3 is missing.")
+		return false
+
 	if player_two_deck == null:
 		push_error("Player two deck is missing.")
 		return false
@@ -1296,10 +1686,7 @@ func _start_animated_combat() -> void:
 		interaction_locked = false
 		hud.set_interaction_enabled(true)
 		return
-	hud.refresh(
-		state,
-		local_player_id
-	)
+
 	await _sync_visual_state()
 
 	_refresh_board_disabled_visuals(false)
@@ -1324,6 +1711,7 @@ func _start_animated_combat() -> void:
 		await get_tree().create_timer(
 			0.25
 		).timeout
+
 	if state.phase == MatchPhase.Type.GAME_OVER:
 		_refresh_battle_scores()
 		_finish_game()
@@ -1343,6 +1731,11 @@ func _start_animated_combat() -> void:
 	kept_hand_card_ids.clear()
 
 	await _sync_visual_state()
+
+	hud.refresh(
+		state,
+		local_player_id
+	)
 
 	_refresh_battle_scores()
 	_refresh_board_disabled_visuals(false)

@@ -12,7 +12,8 @@ signal end_turn_pressed
 @onready var player_mana_label: Label = \
 	$Root/PlayerManaPanel/PlayerManaLabel
 @onready var opponent_mana_label: Label = $Root/PlayerInfo/OpponentManaLabel
-@onready var end_turn_button: Button = $Root/EndTurnButton
+
+@export var end_turn_button: TextureButton
 
 @onready var game_over_overlay: Control = \
 	%GameOverOverlay
@@ -84,10 +85,6 @@ func refresh(
 		or state.phase != MatchPhase.Type.MAIN
 	)
 
-	if player.is_ready:
-		end_turn_button.text = "WAITING..."
-	else:
-		end_turn_button.text = "END TURN"
 
 
 func set_interaction_enabled(enabled: bool) -> void:
